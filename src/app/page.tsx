@@ -62,7 +62,7 @@ function StatCard({
 
   return (
     <div
-      className="relative group rounded-2xl p-6 glass-dark card-hover overflow-hidden animate-slide-up opacity-0"
+      className="relative group rounded-2xl p-6 glass card-hover overflow-hidden animate-slide-up opacity-0 border border-slate-200"
       style={{ animationDelay: `${delay}ms`, animationFillMode: 'forwards' }}
     >
       {/* Animated border glow on hover */}
@@ -84,7 +84,7 @@ function StatCard({
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">
             {label}
           </p>
-          <p className="text-3xl font-black text-white tracking-tight">
+          <p className="text-3xl font-black text-slate-900 tracking-tight">
             {prefix}{displayed.toLocaleString()}{suffix}
           </p>
         </div>
@@ -133,7 +133,7 @@ function ActionCard({
   return (
     <Link
       href={href}
-      className="group relative glass-dark rounded-2xl p-6 card-hover flex items-center gap-5 overflow-hidden animate-slide-up opacity-0 border border-white/[0.06] hover:border-white/[0.12]"
+      className="group relative glass rounded-2xl p-6 card-hover flex items-center gap-5 overflow-hidden animate-slide-up opacity-0 border border-slate-200 hover:border-slate-300"
       style={{ animationDelay: `${delay}ms`, animationFillMode: 'forwards' }}
     >
       {/* Hover background sweep */}
@@ -156,7 +156,7 @@ function ActionCard({
       </div>
 
       <div className="relative flex-1 min-w-0">
-        <p className="font-bold text-white text-sm">{label}</p>
+        <p className="font-bold text-slate-900 text-sm">{label}</p>
         <p className="text-xs text-slate-500 mt-0.5 truncate">{description}</p>
       </div>
 
@@ -203,7 +203,7 @@ export default function Dashboard() {
   }, [])
 
   return (
-    <div className="relative min-h-screen bg-[#080810] overflow-hidden">
+    <div className="relative min-h-screen bg-slate-50 overflow-hidden">
 
       {/* ── Ambient background orbs ── */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -213,7 +213,7 @@ export default function Dashboard() {
         {/* Grid */}
         <div className="absolute inset-0 bg-grid opacity-100" />
         {/* Radial vignette */}
-        <div className="absolute inset-0 bg-radial-dark" style={{ background: 'radial-gradient(ellipse at 50% 0%, transparent 60%, #080810 100%)' }} />
+        <div className="absolute inset-0 bg-radial-dark" style={{ background: 'radial-gradient(ellipse at 50% 0%, transparent 60%, #f8fafc 100%)' }} />
       </div>
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -224,11 +224,11 @@ export default function Dashboard() {
             <Zap className="w-3.5 h-3.5 text-indigo-400" />
             <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Dashboard</span>
           </div>
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-gradient-white mb-4 leading-tight">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 mb-4 leading-tight">
             Welcome to<br />
             <span className="text-gradient">ROCK HARD GYM</span>
           </h1>
-          <p className="text-slate-400 text-lg max-w-xl leading-relaxed">
+          <p className="text-slate-600 text-lg max-w-xl leading-relaxed">
             Your all-in-one gym management platform. Track members, attendance, and revenue in real time.
           </p>
         </div>
@@ -236,7 +236,7 @@ export default function Dashboard() {
         {/* ── Stat Cards ── */}
         <section className="mb-10">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-slate-200 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-indigo-400" />
               Overview
             </h2>
@@ -295,7 +295,7 @@ export default function Dashboard() {
         {/* ── Quick Actions ── */}
         <section>
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-slate-200 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <Zap className="w-5 h-5 text-violet-400" />
               Quick Actions
             </h2>

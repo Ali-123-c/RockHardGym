@@ -36,7 +36,7 @@ export default function AttendancePage() {
   const isToday = date === todayStr
 
   return (
-    <div className="relative min-h-screen bg-[#080810] overflow-hidden">
+    <div className="relative min-h-screen bg-slate-50 overflow-hidden">
       {/* Background orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute top-[-10%] left-[10%] w-[600px] h-[600px] bg-emerald-600/[0.06] rounded-full blur-[130px] animate-orb-move" />
@@ -54,10 +54,10 @@ export default function AttendancePage() {
           </div>
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
             <div>
-              <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-gradient-white mb-2">
+              <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-slate-900 mb-2">
                 Daily Log
               </h1>
-              <p className="text-slate-400 text-base">
+              <p className="text-slate-600 text-base">
                 Track and manage member check-ins in real-time.
               </p>
             </div>
@@ -78,20 +78,20 @@ export default function AttendancePage() {
         <div className={`flex flex-wrap items-center justify-between gap-4 mb-8 transition-all duration-500 delay-100 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           {/* Date Picker */}
           <div className="relative">
-             <div className="flex items-center glass-dark rounded-xl border border-white/[0.06] focus-within:border-emerald-500/40 transition-colors overflow-hidden">
-               <div className="pl-4 pr-2 flex items-center justify-center border-r border-white/[0.06]">
-                 <Calendar className="w-4 h-4 text-slate-400" />
+             <div className="flex items-center glass rounded-xl border border-slate-200 focus-within:border-emerald-500/40 transition-colors overflow-hidden">
+               <div className="pl-4 pr-2 flex items-center justify-center border-r border-slate-200">
+                 <Calendar className="w-4 h-4 text-slate-500" />
                </div>
                <input 
                  type="date"
                  value={date}
                  onChange={e => setDate(e.target.value)}
-                 className="bg-transparent text-slate-200 px-4 py-2.5 outline-none text-sm font-medium [color-scheme:dark]"
+                 className="bg-transparent text-slate-900 px-4 py-2.5 outline-none text-sm font-medium [color-scheme:light]"
                />
                {!isToday && (
                  <button 
                    onClick={() => setDate(todayStr)}
-                   className="px-4 py-2.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors border-l border-white/[0.06]"
+                   className="px-4 py-2.5 text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-colors border-l border-slate-200"
                  >
                    Today
                  </button>
@@ -101,15 +101,15 @@ export default function AttendancePage() {
           
           {/* Stats Chips */}
           <div className="flex gap-3">
-             <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass-dark border border-white/[0.06]">
-               <Activity className="w-4 h-4 text-slate-400" />
-               <span className="text-sm font-bold text-slate-200">{records.length} <span className="font-normal text-slate-500 ml-1">Check-ins</span></span>
+             <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass border border-slate-200">
+               <Activity className="w-4 h-4 text-slate-500" />
+               <span className="text-sm font-bold text-slate-900">{records.length} <span className="font-normal text-slate-600 ml-1">Check-ins</span></span>
              </div>
           </div>
         </div>
 
         {/* Attendance List */}
-        <div className={`glass-dark rounded-3xl border border-white/[0.06] overflow-hidden transition-all duration-500 delay-150 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+        <div className={`glass rounded-3xl border border-slate-200 overflow-hidden transition-all duration-500 delay-150 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           {loading ? (
              <div className="p-8 space-y-4">
                {[...Array(5)].map((_, i) => (
@@ -121,15 +121,15 @@ export default function AttendancePage() {
                 <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center mb-4 border border-emerald-500/20">
                   <Clock className="w-8 h-8 text-emerald-400 opacity-50" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">No check-ins yet</h3>
-                <p className="text-slate-400 text-sm max-w-sm">
+                <h3 className="text-xl font-bold text-slate-900 mb-2">No check-ins yet</h3>
+                <p className="text-slate-600 text-sm max-w-sm">
                   {isToday ? "No members have checked in today. Waiting for the first scan..." : `No attendance records found for ${new Date(date).toLocaleDateString()}.`}
                 </p>
              </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
-                <thead className="text-xs text-slate-400 uppercase bg-white/[0.02] border-b border-white/[0.06]">
+                <thead className="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
                   <tr>
                     <th className="px-6 py-4 font-bold tracking-wider">Member</th>
                     <th className="px-6 py-4 font-bold tracking-wider">Time</th>
@@ -137,7 +137,7 @@ export default function AttendancePage() {
                     <th className="px-6 py-4 font-bold tracking-wider">Attendance</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.04]">
+                <tbody className="divide-y divide-slate-200">
                   {records.map((record) => {
                     const member = record.members;
                     const isActive = member.status === 'Active';
@@ -160,21 +160,21 @@ export default function AttendancePage() {
                       : scanDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                     
                     return (
-                      <tr key={record.id} className="hover:bg-white/[0.02] transition-colors group">
+                      <tr key={record.id} className="hover:bg-slate-50 transition-colors group">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center border border-emerald-500/20 flex-shrink-0 group-hover:scale-105 transition-transform">
                               <span className="font-black text-emerald-400 text-xs">{initials}</span>
                             </div>
                             <div>
-                              <p className="font-bold text-slate-200">{member?.name || 'Unknown'}</p>
+                              <p className="font-bold text-slate-900">{member?.name || 'Unknown'}</p>
                               <p className="text-xs text-slate-500 font-mono mt-0.5">{member?.membership_no || '-'}</p>
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.05] font-mono text-slate-300">
-                             <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-slate-200 font-mono text-slate-700 shadow-sm">
+                             <Clock className="w-3.5 h-3.5 text-emerald-500" />
                              {timeStr}
                            </div>
                         </td>

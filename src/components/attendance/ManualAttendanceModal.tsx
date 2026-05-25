@@ -99,27 +99,27 @@ export function ManualAttendanceModal({ onClose, onSuccess, alreadyMarkedIds }: 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
-      style={{ background: 'rgba(4,4,12,0.85)', backdropFilter: 'blur(20px)' }}
+      style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(20px)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="relative w-full max-w-lg max-h-[85vh] flex flex-col bg-[#0f0f1a] rounded-3xl shadow-[0_32px_80px_rgba(0,0,0,0.8)] border border-white/[0.07] overflow-hidden animate-scale-in">
+      <div className="relative w-full max-w-lg max-h-[85vh] flex flex-col bg-slate-50 rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-scale-in">
         <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500" />
 
         {/* Admin Review Overlay */}
         {reviewMember && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-8 bg-[#0f0f1a]/95 backdrop-blur-md text-center animate-fade-in">
-            <div className="w-16 h-16 rounded-full bg-rose-500/10 flex items-center justify-center mb-6 border border-rose-500/20">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-8 bg-white/95 backdrop-blur-md text-center animate-fade-in">
+            <div className="w-16 h-16 rounded-full bg-rose-50 flex items-center justify-center mb-6 border border-rose-200">
               <AlertCircle className="w-8 h-8 text-rose-500" />
             </div>
-            <h3 className="text-2xl font-black text-white mb-3">Review Required</h3>
-            <p className="text-slate-300 text-sm mb-8 max-w-sm leading-relaxed">
-              <strong className="text-white">{reviewMember.name}</strong> has been absent for 10 or more days this month. 
-              Their status has automatically been set to <strong className="text-rose-400">Inactive</strong>.
+            <h3 className="text-2xl font-black text-slate-900 mb-3">Review Required</h3>
+            <p className="text-slate-600 text-sm mb-8 max-w-sm leading-relaxed">
+              <strong className="text-slate-900">{reviewMember.name}</strong> has been absent for 10 or more days this month. 
+              Their status has automatically been set to <strong className="text-rose-500">Inactive</strong>.
             </p>
             <div className="flex gap-3 w-full max-w-xs">
               <button 
                 onClick={handleMakeInactive}
-                className="flex-1 py-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 font-semibold transition"
+                className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition"
               >
                 Keep Inactive
               </button>
@@ -133,18 +133,18 @@ export function ManualAttendanceModal({ onClose, onSuccess, alreadyMarkedIds }: 
           </div>
         )}
 
-        <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.06] flex-shrink-0">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 flex-shrink-0">
           <div>
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <UserCheck className="w-5 h-5 text-emerald-400" /> Mark Attendance
+            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-emerald-500" /> Mark Attendance
             </h2>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-slate-600 text-sm mt-1">
               {markedCount > 0
-                ? <span className="text-emerald-400 font-semibold">{markedCount} member{markedCount > 1 ? 's' : ''} marked ✓ — keep going or close</span>
+                ? <span className="text-emerald-600 font-semibold">{markedCount} member{markedCount > 1 ? 's' : ''} marked ✓ — keep going or close</span>
                 : 'Search for a member to mark them present'}
             </p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition">
+          <button onClick={onClose} className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -152,7 +152,7 @@ export function ManualAttendanceModal({ onClose, onSuccess, alreadyMarkedIds }: 
         <div className="p-6 flex flex-col gap-4 flex-1 overflow-hidden">
           <div className="relative group flex-shrink-0">
             <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl blur opacity-0 group-focus-within:opacity-20 transition duration-500" />
-            <div className="relative flex items-center bg-[#1a1a2e] rounded-xl border border-white/[0.07] group-focus-within:border-emerald-500/40 transition-colors">
+            <div className="relative flex items-center bg-white rounded-xl border border-slate-300 group-focus-within:border-emerald-500/40 transition-colors shadow-sm">
               <Search className="absolute left-3.5 w-4 h-4 text-slate-500" />
               <input
                 autoFocus
@@ -160,7 +160,7 @@ export function ManualAttendanceModal({ onClose, onSuccess, alreadyMarkedIds }: 
                 placeholder="Search by name, ID or phone..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-transparent text-slate-200 placeholder-slate-500 outline-none text-sm"
+                className="w-full pl-10 pr-4 py-3 bg-transparent text-slate-900 placeholder-slate-400 outline-none text-sm"
               />
             </div>
           </div>
@@ -185,12 +185,12 @@ export function ManualAttendanceModal({ onClose, onSuccess, alreadyMarkedIds }: 
                     key={member.id}
                     className={`flex items-center justify-between p-3 rounded-xl border transition group ${
                       isMarked
-                        ? 'border-emerald-500/30 bg-emerald-500/[0.06]'
-                        : 'border-white/[0.04] bg-white/[0.02] hover:bg-white/[0.04]'
+                        ? 'border-emerald-200 bg-emerald-50'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 shadow-sm'
                     }`}
                   >
                     <div>
-                      <p className={`font-semibold text-sm ${isMarked ? 'text-emerald-300' : 'text-slate-200'}`}>
+                      <p className={`font-semibold text-sm ${isMarked ? 'text-emerald-700' : 'text-slate-900'}`}>
                         {member.name}
                         {isMarked && <span className="ml-2 text-xs font-normal text-emerald-500">● Present</span>}
                       </p>
@@ -201,8 +201,8 @@ export function ManualAttendanceModal({ onClose, onSuccess, alreadyMarkedIds }: 
                       disabled={isMarked || submitting !== null}
                       className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${
                         isMarked
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
-                          : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white disabled:opacity-50'
+                          ? 'bg-emerald-100 text-emerald-600 border border-emerald-200 cursor-default'
+                          : 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-500 hover:text-white disabled:opacity-50'
                       }`}
                     >
                       {isSubmitting
@@ -219,10 +219,10 @@ export function ManualAttendanceModal({ onClose, onSuccess, alreadyMarkedIds }: 
         </div>
 
         {/* Footer: Done button */}
-        <div className="px-6 pb-5 flex-shrink-0 border-t border-white/[0.06] pt-4">
+        <div className="px-6 pb-5 flex-shrink-0 border-t border-slate-200 pt-4">
           <button
             onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.07] text-slate-300 text-sm font-semibold border border-white/[0.06] transition"
+            className="w-full py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-sm font-semibold border border-slate-200 transition shadow-sm"
           >
             Done
           </button>

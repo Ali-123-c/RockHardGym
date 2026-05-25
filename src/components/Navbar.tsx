@@ -33,7 +33,7 @@ export function Navbar() {
       <header
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
           scrolled
-            ? 'bg-[#080810]/90 backdrop-blur-2xl border-b border-white/[0.06] shadow-[0_8px_40px_rgba(0,0,0,0.6)]'
+            ? 'bg-white/90 backdrop-blur-2xl border-b border-slate-200 shadow-sm'
             : 'bg-transparent border-b border-transparent'
         }`}
       >
@@ -49,7 +49,7 @@ export function Navbar() {
                   <Dumbbell className="w-5 h-5 text-white" strokeWidth={2.5} />
                 </div>
               </div>
-              <span className="text-xl font-extrabold tracking-tight text-gradient hidden sm:block">
+              <span className="text-xl font-extrabold tracking-tight text-slate-900 hidden sm:block">
                 ROCK HARD GYM
               </span>
             </Link>
@@ -64,8 +64,8 @@ export function Navbar() {
                     href={href}
                     className={`relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 group ${
                       isActive
-                        ? 'text-white bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]'
-                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        ? 'text-slate-900 bg-slate-100 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                     }`}
                   >
                     <Icon
@@ -94,7 +94,7 @@ export function Navbar() {
             {/* Mobile menu button */}
             <button
               onClick={() => setMobileOpen(!mobileOpen)}
-              className="md:hidden p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors"
+              className="md:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-colors"
               aria-label="Toggle menu"
             >
               {mobileOpen
@@ -111,7 +111,7 @@ export function Navbar() {
             mobileOpen ? 'max-h-80 opacity-100' : 'max-h-0 opacity-0'
           }`}
         >
-          <div className="bg-[#0f0f1a]/95 backdrop-blur-2xl border-t border-white/[0.06] px-4 py-4 space-y-1">
+          <div className="bg-white/95 backdrop-blur-2xl border-t border-slate-200 px-4 py-4 space-y-1">
             {navLinks.map(({ href, label, icon: Icon }) => {
               const isActive = pathname === href
               return (
@@ -120,8 +120,8 @@ export function Navbar() {
                   href={href}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                     isActive
-                      ? 'bg-indigo-500/15 text-white border border-indigo-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
                   <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-400' : ''}`} />

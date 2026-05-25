@@ -13,8 +13,8 @@ interface FieldProps {
 function Field({ label, icon: Icon, children, span }: FieldProps) {
   return (
     <div className={`space-y-2 ${span ? 'md:col-span-2' : ''}`}>
-      <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest">
-        <Icon className="w-3.5 h-3.5 text-indigo-400" />
+      <label className="flex items-center gap-2 text-xs font-bold text-slate-600 uppercase tracking-widest">
+        <Icon className="w-3.5 h-3.5 text-indigo-500" />
         {label}
       </label>
       <div className="relative group">
@@ -26,7 +26,7 @@ function Field({ label, icon: Icon, children, span }: FieldProps) {
 }
 
 const inputClass =
-  'relative w-full px-4 py-3 bg-[#1a1a2e] border border-white/[0.07] text-slate-200 placeholder-slate-600 rounded-xl focus:outline-none focus:border-indigo-500/50 transition-all duration-300 text-sm'
+  'relative w-full px-4 py-3 bg-white border border-slate-300 text-slate-900 placeholder-slate-400 rounded-xl focus:outline-none focus:border-indigo-500/50 transition-all duration-300 text-sm'
 
 export function PaymentModal({ onClose, onSuccess, initialMemberId = '' }: any) {
   const [members, setMembers] = useState<any[]>([])
@@ -108,18 +108,18 @@ export function PaymentModal({ onClose, onSuccess, initialMemberId = '' }: any) 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
-      style={{ background: 'rgba(4,4,12,0.85)', backdropFilter: 'blur(20px)' }}
+      style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(20px)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="relative w-full max-w-2xl flex flex-col bg-[#0f0f1a] rounded-3xl shadow-[0_32px_80px_rgba(0,0,0,0.8)] border border-white/[0.07] overflow-hidden animate-scale-in">
+      <div className="relative w-full max-w-2xl flex flex-col bg-slate-50 rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-scale-in">
         <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500" />
 
-        <div className="relative flex items-center justify-between px-8 py-6 border-b border-white/[0.06] flex-shrink-0">
+        <div className="relative flex items-center justify-between px-8 py-6 border-b border-slate-200 flex-shrink-0">
           <div>
-            <h2 className="text-2xl font-black text-white tracking-tight">Record Payment</h2>
-            <p className="text-slate-500 text-sm mt-0.5">Enter payment details for the selected month</p>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Record Payment</h2>
+            <p className="text-slate-600 text-sm mt-0.5">Enter payment details for the selected month</p>
           </div>
-          <button type="button" onClick={onClose} className="p-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition">
+          <button type="button" onClick={onClose} className="p-2.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -181,11 +181,11 @@ export function PaymentModal({ onClose, onSuccess, initialMemberId = '' }: any) 
             </Field>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-white/[0.05]">
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/[0.06] border border-white/[0.06] transition"
+              className="px-6 py-3 rounded-xl text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition"
             >
               Cancel
             </button>

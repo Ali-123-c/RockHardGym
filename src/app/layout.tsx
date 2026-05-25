@@ -14,18 +14,18 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
-      <body className="bg-[#080810] text-slate-200 antialiased noise">
+    <html lang="en" className="light" suppressHydrationWarning>
+      <body className="bg-slate-50 text-slate-900 antialiased noise">
         <Navbar />
         <main>{children}</main>
         <Toaster
-          theme="dark"
+          theme="light"
           position="top-right"
           toastOptions={{
             style: {
-              background: '#13131f',
-              border: '1px solid rgba(255,255,255,0.08)',
-              color: '#e2e8f0',
+              background: '#ffffff',
+              border: '1px solid rgba(0,0,0,0.08)',
+              color: '#0f172a',
             },
           }}
         />

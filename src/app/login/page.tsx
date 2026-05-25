@@ -46,7 +46,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#080810] flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background Effects */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-20%] right-[-10%] w-[800px] h-[800px] bg-violet-600/[0.05] rounded-full blur-[150px]" />
@@ -55,7 +55,7 @@ export default function LoginPage() {
       </div>
 
       <div className="w-full max-w-md relative z-10">
-        <div className="glass-dark rounded-3xl border border-white/[0.06] overflow-hidden shadow-2xl">
+        <div className="glass rounded-3xl border border-slate-200 overflow-hidden shadow-2xl">
           <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-violet-500" />
           
           <div className="p-8">
@@ -63,10 +63,10 @@ export default function LoginPage() {
               <Lock className="w-8 h-8 text-violet-400" />
             </div>
             
-            <h1 className="text-2xl font-black text-white text-center tracking-tight mb-2">
+            <h1 className="text-2xl font-black text-slate-900 text-center tracking-tight mb-2">
               ROCK HARD GYM Admin
             </h1>
-            <p className="text-slate-400 text-sm text-center mb-8">
+            <p className="text-slate-600 text-sm text-center mb-8">
               {isLogin ? 'Securely login to manage your gym.' : 'Create the first admin account.'}
             </p>
 
@@ -78,7 +78,7 @@ export default function LoginPage() {
 
             <form onSubmit={handleAuth} className="space-y-5">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Email Address</label>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-2 ml-1">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                   <input
@@ -86,14 +86,14 @@ export default function LoginPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3.5 bg-[#1a1a2e] border border-white/[0.07] text-white rounded-xl focus:outline-none focus:border-violet-500/50 transition-all text-sm"
+                    className="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-300 text-slate-900 rounded-xl focus:outline-none focus:border-violet-500/50 transition-all text-sm"
                     placeholder="admin@gym.com"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Password</label>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-2 ml-1">Password</label>
                 <div className="relative">
                   <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                   <input
@@ -101,7 +101,7 @@ export default function LoginPage() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3.5 bg-[#1a1a2e] border border-white/[0.07] text-white rounded-xl focus:outline-none focus:border-violet-500/50 transition-all text-sm"
+                    className="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-300 text-slate-900 rounded-xl focus:outline-none focus:border-violet-500/50 transition-all text-sm"
                     placeholder="••••••••"
                   />
                 </div>
@@ -126,7 +126,7 @@ export default function LoginPage() {
             <div className="mt-6 text-center">
               <button 
                 onClick={() => { setIsLogin(!isLogin); setError(''); }}
-                className="text-xs text-slate-500 hover:text-white transition"
+                className="text-xs text-slate-600 hover:text-indigo-600 transition"
                 type="button"
               >
                 {isLogin ? "Don't have an account? Sign up" : "Already have an account? Login"}

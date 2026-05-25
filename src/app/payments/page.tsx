@@ -86,7 +86,7 @@ export default function PaymentsPage() {
   }
 
   return (
-    <div className="relative min-h-screen bg-[#080810] overflow-hidden">
+    <div className="relative min-h-screen bg-slate-50 overflow-hidden">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute top-[-10%] right-[10%] w-[600px] h-[600px] bg-violet-600/[0.07] rounded-full blur-[130px] animate-orb-move" />
         <div className="absolute bottom-[-15%] left-[5%] w-[500px] h-[500px] bg-emerald-600/[0.05] rounded-full blur-[100px] animate-orb-move" style={{ animationDelay: '-5s' }} />
@@ -102,8 +102,8 @@ export default function PaymentsPage() {
               <CreditCard className="w-3.5 h-3.5 text-violet-400" />
               <span className="text-xs font-bold text-violet-400 uppercase tracking-widest">Finance</span>
             </div>
-            <h1 className="text-4xl font-black tracking-tight text-white mb-2">Payments</h1>
-            <p className="text-slate-400 text-sm max-w-xl">Manage fee collections, track revenue, and print receipts.</p>
+            <h1 className="text-4xl font-black tracking-tight text-slate-900 mb-2">Payments</h1>
+            <p className="text-slate-600 text-sm max-w-xl">Manage fee collections, track revenue, and print receipts.</p>
           </div>
           
           <div className="flex items-center gap-4">
@@ -111,7 +111,7 @@ export default function PaymentsPage() {
               type="month" 
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-4 py-2.5 bg-white/[0.03] border border-white/[0.07] rounded-xl text-white outline-none focus:border-violet-500/50 transition cursor-pointer"
+              className="px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 outline-none focus:border-violet-500/50 transition cursor-pointer"
             />
             <button 
               onClick={() => handleRecordPayment()}
@@ -124,45 +124,45 @@ export default function PaymentsPage() {
 
         {/* Stats */}
         <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 mb-10 transition-all duration-500 delay-100 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <div className="glass-dark rounded-3xl border border-emerald-500/20 p-6 flex items-center gap-6 relative overflow-hidden group">
+          <div className="glass rounded-3xl border border-emerald-500/20 p-6 flex items-center gap-6 relative overflow-hidden group">
             <div className="absolute inset-0 bg-emerald-500/5 group-hover:bg-emerald-500/10 transition" />
             <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center relative z-10">
               <Wallet className="w-8 h-8 text-emerald-400" />
             </div>
             <div className="relative z-10">
               <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Total Revenue</p>
-              <h2 className="text-4xl font-black text-white">Rs {totalRevenue.toLocaleString()}</h2>
+              <h2 className="text-4xl font-black text-slate-900">Rs {totalRevenue.toLocaleString()}</h2>
             </div>
           </div>
           
-          <div className="glass-dark rounded-3xl border border-rose-500/20 p-6 flex items-center gap-6 relative overflow-hidden group">
+          <div className="glass rounded-3xl border border-rose-500/20 p-6 flex items-center gap-6 relative overflow-hidden group">
              <div className="absolute inset-0 bg-rose-500/5 group-hover:bg-rose-500/10 transition" />
             <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center relative z-10">
               <AlertCircle className="w-8 h-8 text-rose-400" />
             </div>
             <div className="relative z-10">
               <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Pending Collections</p>
-              <h2 className="text-4xl font-black text-white">{pendingMembers.length} <span className="text-xl text-slate-500">members</span></h2>
+              <h2 className="text-4xl font-black text-slate-900">{pendingMembers.length} <span className="text-xl text-slate-600">members</span></h2>
             </div>
           </div>
         </div>
 
         {/* Main Content Area */}
-        <div className={`glass-dark rounded-3xl border border-white/[0.06] overflow-hidden transition-all duration-500 delay-200 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+        <div className={`glass rounded-3xl border border-slate-200 overflow-hidden transition-all duration-500 delay-200 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           
           {/* Tabs & Search */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 border-b border-white/[0.06] gap-4">
-            <div className="flex p-1 bg-white/[0.03] rounded-xl border border-white/[0.05] inline-flex">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 border-b border-slate-200 gap-4">
+            <div className="flex p-1 bg-white rounded-xl border border-slate-200 inline-flex shadow-sm">
               <button 
                 onClick={() => setActiveTab('pending')}
-                className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition ${activeTab === 'pending' ? 'bg-white/[0.08] text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition ${activeTab === 'pending' ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 <AlertCircle className="w-4 h-4" /> Pending
                 <span className="ml-1 px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-400 text-xs">{pendingMembers.length}</span>
               </button>
               <button 
                 onClick={() => setActiveTab('history')}
-                className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition ${activeTab === 'history' ? 'bg-white/[0.08] text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition ${activeTab === 'history' ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 <History className="w-4 h-4" /> History
                 <span className="ml-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 text-xs">{payments.length}</span>
@@ -176,7 +176,7 @@ export default function PaymentsPage() {
                 placeholder="Search member..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-white/[0.03] border border-white/[0.07] rounded-xl text-sm text-white outline-none focus:border-violet-500/50 transition"
+                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 outline-none focus:border-violet-500/50 transition"
               />
             </div>
           </div>
@@ -189,15 +189,15 @@ export default function PaymentsPage() {
                 <p>Loading data...</p>
               </div>
             ) : activeTab === 'pending' ? (
-              <table className="w-full text-left text-sm text-slate-300">
-                <thead className="text-xs uppercase bg-white/[0.02] text-slate-400 border-b border-white/[0.06]">
+              <table className="w-full text-left text-sm text-slate-700">
+                <thead className="text-xs uppercase bg-slate-50 text-slate-600 border-b border-slate-200">
                   <tr>
                     <th className="px-6 py-4 font-bold">Member</th>
                     <th className="px-6 py-4 font-bold">Fee Amount</th>
                     <th className="px-6 py-4 font-bold text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.04]">
+                <tbody className="divide-y divide-slate-200">
                   {filteredPending.length === 0 ? (
                     <tr>
                       <td colSpan={3} className="px-6 py-12 text-center text-slate-500">
@@ -205,9 +205,9 @@ export default function PaymentsPage() {
                       </td>
                     </tr>
                   ) : filteredPending.map(m => (
-                    <tr key={m.id} className="hover:bg-white/[0.02] transition">
+                    <tr key={m.id} className="hover:bg-slate-50 transition">
                       <td className="px-6 py-4">
-                        <div className="font-bold text-white mb-0.5">{m.name}</div>
+                        <div className="font-bold text-slate-900 mb-0.5">{m.name}</div>
                         <div className="text-xs text-slate-500 font-mono">{m.membership_no}</div>
                       </td>
                       <td className="px-6 py-4 font-bold text-rose-400">
@@ -226,8 +226,8 @@ export default function PaymentsPage() {
                 </tbody>
               </table>
             ) : (
-              <table className="w-full text-left text-sm text-slate-300">
-                <thead className="text-xs uppercase bg-white/[0.02] text-slate-400 border-b border-white/[0.06]">
+              <table className="w-full text-left text-sm text-slate-700">
+                <thead className="text-xs uppercase bg-slate-50 text-slate-600 border-b border-slate-200">
                   <tr>
                     <th className="px-6 py-4 font-bold">Member</th>
                     <th className="px-6 py-4 font-bold">Amount Paid</th>
@@ -235,7 +235,7 @@ export default function PaymentsPage() {
                     <th className="px-6 py-4 font-bold text-right">Receipt</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.04]">
+                <tbody className="divide-y divide-slate-200">
                   {filteredHistory.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
@@ -243,9 +243,9 @@ export default function PaymentsPage() {
                       </td>
                     </tr>
                   ) : filteredHistory.map(p => (
-                    <tr key={p.id} className="hover:bg-white/[0.02] transition">
+                    <tr key={p.id} className="hover:bg-slate-50 transition">
                       <td className="px-6 py-4">
-                        <div className="font-bold text-white mb-0.5">{p.members?.name}</div>
+                        <div className="font-bold text-slate-900 mb-0.5">{p.members?.name}</div>
                         <div className="text-xs text-slate-500 font-mono">{p.members?.membership_no}</div>
                       </td>
                       <td className="px-6 py-4 font-bold text-emerald-400">
@@ -257,7 +257,7 @@ export default function PaymentsPage() {
                       <td className="px-6 py-4 text-right">
                         <button 
                           onClick={() => setSelectedReceipt(p)}
-                          className="p-2 rounded-lg bg-white/[0.05] text-slate-300 hover:text-white hover:bg-white/[0.1] transition border border-white/[0.05] inline-flex"
+                          className="p-2 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 transition border border-slate-200 inline-flex"
                           title="View Receipt"
                         >
                           <Receipt className="w-4 h-4" />

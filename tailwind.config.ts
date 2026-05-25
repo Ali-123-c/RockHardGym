@@ -9,12 +9,12 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: '#6366f1',
-        secondary: '#8b5cf6',
-        accent: '#d946ef',
-        surface: '#0f0f1a',
-        'surface-2': '#13131f',
-        'surface-3': '#1a1a2e',
+        primary: '#4f46e5',
+        secondary: '#6366f1',
+        accent: '#f97316',
+        surface: '#ffffff',
+        'surface-2': '#f8fafc',
+        'surface-3': '#f1f5f9',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

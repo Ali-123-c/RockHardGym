@@ -1,0 +1,8 @@
+{
+  "api_url": "http://localhost:3000",
+  "device_type": "zkteco",
+  "device_port": "COM3",
+  "device_baudrate": 9600,
+  "retry_attempts": 3,
+  "timeout_seconds": 10
+}

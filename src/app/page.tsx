@@ -178,18 +178,44 @@ export default function Dashboard() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const res = await fetch('/api/members')
-        const data = await res.json()
-        if (data.success && Array.isArray(data.data)) {
-          const members = data.data
-          const active = members.filter((m: any) => m.status === 'Active').length
-          const revenue = members
-            .filter((m: any) => m.status === 'Active')
-            .reduce((sum: number, m: any) => sum + (m.fee_amount || 0), 0)
+        const now = new Date()
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+
+        const [membersRes, paymentsRes] = await Promise.all([
+          fetch('/api/members'),
+          fetch(`/api/payments?month=${currentMonth}`)
+        ])
+
+        const membersData = await membersRes.json()
+        const paymentsData = await paymentsRes.json()
+
+        if (membersData.success && Array.isArray(membersData.data)) {
+          const members = membersData.data
+          const activeMembers = members.filter((m: any) => m.status === 'Active')
+          const activeCount = activeMembers.length
+
+          let payments: any[] = []
+          if (paymentsData.success && Array.isArray(paymentsData.data)) {
+            payments = paymentsData.data
+          }
+
+          const paidMemberIds = new Set(payments.map(p => p.member_id))
+          
+          const pendingCount = activeMembers.filter((m: any) => {
+            if (paidMemberIds.has(m.id)) return false
+            if (m.joining_date) {
+              const joinMonth = m.joining_date.substring(0, 7)
+              if (joinMonth > currentMonth) return false
+            }
+            return true
+          }).length
+
+          const revenue = payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0)
+
           setStats({
             totalMembers: members.length,
-            activeMembers: active,
-            pendingFees: members.length - active,
+            activeMembers: activeCount,
+            pendingFees: pendingCount,
             monthlyRevenue: revenue,
           })
         }

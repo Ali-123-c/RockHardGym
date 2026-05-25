@@ -226,7 +226,7 @@ export default function Dashboard() {
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-gradient-white mb-4 leading-tight">
             Welcome to<br />
-            <span className="text-gradient">GymFlow</span>
+            <span className="text-gradient">ROCK HARD GYM</span>
           </h1>
           <p className="text-slate-400 text-lg max-w-xl leading-relaxed">
             Your all-in-one gym management platform. Track members, attendance, and revenue in real time.
@@ -335,7 +335,7 @@ export default function Dashboard() {
         {/* ── Footer note ── */}
         <div className="mt-16 text-center animate-fade-in opacity-0" style={{ animationDelay: '600ms', animationFillMode: 'forwards' }}>
           <p className="text-slate-700 text-xs">
-            GymFlow &copy; {new Date().getFullYear()} &mdash; Built for performance
+            ROCK HARD GYM &copy; {new Date().getFullYear()} &mdash; Built for performance
           </p>
         </div>
       </div>

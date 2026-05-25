@@ -4,7 +4,7 @@ import { Navbar } from '@/components/Navbar'
 import { Toaster } from 'sonner'
 
 export const metadata: Metadata = {
-  title: 'GymFlow — Gym Management System',
+  title: 'ROCK HARD GYM — Gym Management System',
   description: 'Modern gym management with member tracking, attendance, and payments.',
 }
 

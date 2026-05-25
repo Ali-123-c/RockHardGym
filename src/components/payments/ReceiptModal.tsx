@@ -30,7 +30,7 @@ export function ReceiptModal({ payment, onClose }: any) {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/10 print:bg-emerald-100 mb-4 border border-emerald-500/20 print:border-none">
               <CheckCircle2 className="w-8 h-8 text-emerald-500 print:text-emerald-600" />
             </div>
-            <h1 className="text-2xl font-black text-white print:text-black tracking-tight mb-1">GymFlow</h1>
+            <h1 className="text-2xl font-black text-white print:text-black tracking-tight mb-1">ROCK HARD GYM</h1>
             <p className="text-sm text-slate-400 print:text-gray-500 uppercase tracking-widest">Payment Receipt</p>
           </div>
 

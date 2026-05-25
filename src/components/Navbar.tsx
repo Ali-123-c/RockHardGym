@@ -50,7 +50,7 @@ export function Navbar() {
                 </div>
               </div>
               <span className="text-xl font-extrabold tracking-tight text-gradient hidden sm:block">
-                GymFlow
+                ROCK HARD GYM
               </span>
             </Link>
 

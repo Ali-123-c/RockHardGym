@@ -64,7 +64,7 @@ export default function LoginPage() {
             </div>
             
             <h1 className="text-2xl font-black text-white text-center tracking-tight mb-2">
-              GymFlow Admin
+              ROCK HARD GYM Admin
             </h1>
             <p className="text-slate-400 text-sm text-center mb-8">
               {isLogin ? 'Securely login to manage your gym.' : 'Create the first admin account.'}

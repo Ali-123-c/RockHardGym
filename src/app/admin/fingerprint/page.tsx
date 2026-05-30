@@ -1,43 +1,55 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase-browser'
+import { useState, useEffect, useCallback } from 'react'
+import { createClient } from '@/lib/supabase-browser'
 import { 
   Fingerprint, Signal, SignalZero, SignalHigh, 
   RefreshCw, Activity, Clock, ShieldCheck,
-  Server, HardDrive, Wifi, WifiOff, AlertCircle
+  Server, HardDrive, Wifi, WifiOff, AlertCircle, Users
 } from 'lucide-react'
-import { format } from 'date-fns'
+
+const formatDate = (date: Date, pattern: 'hh:mm a' | 'MMM d, yyyy HH:mm:ss' | 'HH:mm:ss') => {
+  if (pattern === 'hh:mm a') {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date)
+  }
+
+  if (pattern === 'HH:mm:ss') {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(date)
+  }
+
+  const monthDayYear = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date)
+  const time = new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date)
+
+  return `${monthDayYear} ${time}`
+}
 
 export default function FingerprintDashboard() {
+  const [supabase] = useState(() => createClient())
   const [devices, setDevices] = useState<any[]>([])
   const [syncLogs, setSyncLogs] = useState<any[]>([])
   const [attendanceToday, setAttendanceToday] = useState(0)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
 
-  useEffect(() => {
-    fetchData()
-    // Setup realtime subscription for logs
-    const channel = supabase
-      .channel('fingerprint_updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => {
-        fetchData()
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sync_logs' }, () => {
-        fetchData()
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'fingerprint_devices' }, () => {
-        fetchData()
-      })
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [])
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       // Fetch devices
       const { data: dData } = await supabase.from('fingerprint_devices').select('*').order('created_at', { ascending: false })
@@ -60,7 +72,28 @@ export default function FingerprintDashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    fetchData()
+    // Setup realtime subscription for logs
+    const channel = supabase
+      .channel('fingerprint_updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => {
+        fetchData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sync_logs' }, () => {
+        fetchData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fingerprint_devices' }, () => {
+        fetchData()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [fetchData, supabase])
 
   const handleManualSync = async () => {
     setSyncing(true)
@@ -131,7 +164,7 @@ export default function FingerprintDashboard() {
               <Users className="w-8 h-8 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Today's Check-ins</p>
+              <p className="text-sm font-medium text-slate-500">Today&apos;s Check-ins</p>
               <p className="text-3xl font-bold text-slate-900">{attendanceToday}</p>
             </div>
           </div>
@@ -143,7 +176,7 @@ export default function FingerprintDashboard() {
             <div>
               <p className="text-sm font-medium text-slate-500">Last Network Sync</p>
               <p className="text-xl font-bold text-slate-900">
-                {devices[0]?.last_sync ? format(new Date(devices[0].last_sync), 'hh:mm a') : 'Never'}
+                {devices[0]?.last_sync ? formatDate(new Date(devices[0].last_sync), 'hh:mm a') : 'Never'}
               </p>
             </div>
           </div>
@@ -198,7 +231,7 @@ export default function FingerprintDashboard() {
                       <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Last Sync</p>
                       <p className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
                         <Clock className="w-4 h-4 text-slate-400" />
-                        {device.last_sync ? format(new Date(device.last_sync), 'MMM d, yyyy HH:mm:ss') : 'Unknown'}
+                        {device.last_sync ? formatDate(new Date(device.last_sync), 'MMM d, yyyy HH:mm:ss') : 'Unknown'}
                       </p>
                     </div>
                     <div>
@@ -236,7 +269,7 @@ export default function FingerprintDashboard() {
                           {log.sync_status}
                         </span>
                         <span className="text-xs text-slate-400 font-medium">
-                          {format(new Date(log.created_at), 'HH:mm:ss')}
+                          {formatDate(new Date(log.created_at), 'HH:mm:ss')}
                         </span>
                       </div>
                       <p className="text-sm text-slate-600">

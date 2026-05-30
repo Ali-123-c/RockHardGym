@@ -3,13 +3,14 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Dumbbell, Users, Clock, CreditCard, LayoutDashboard, Menu, X } from 'lucide-react'
+import { Dumbbell, Users, Clock, CreditCard, LayoutDashboard, Menu, X, Fingerprint } from 'lucide-react'
 
 const navLinks = [
   { href: '/',           label: 'Dashboard',  icon: LayoutDashboard },
   { href: '/members',    label: 'Members',    icon: Users },
   { href: '/attendance', label: 'Attendance', icon: Clock },
   { href: '/payments',   label: 'Payments',   icon: CreditCard },
+  { href: '/admin/fingerprint', label: 'Devices', icon: Fingerprint },
 ]
 
 export function Navbar() {

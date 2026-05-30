@@ -103,3 +103,53 @@ export interface AppConfig {
   app_name: string
   app_url: string
 }
+
+// Fingerprint Integration Types
+export interface FingerprintDevice {
+  id: string
+  device_name: string
+  device_model: string
+  ip_address: string
+  port: number
+  communication_password?: string
+  status: 'Online' | 'Offline' | 'Error'
+  last_sync?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface AttendanceLog {
+  id: string
+  member_id?: string
+  member_name?: string
+  device_id: string
+  event_type: 'checkin' | 'checkout'
+  timestamp: string
+  synced_at?: string
+}
+
+export interface SyncLog {
+  id: string
+  device_id: string
+  sync_status: 'Success' | 'Failed' | 'Partial'
+  records_synced: number
+  error_message?: string
+  created_at?: string
+}
+
+export interface DeviceHealthLog {
+  id: string
+  device_id: string
+  status: 'Online' | 'Offline' | 'Error'
+  response_time?: number
+  created_at?: string
+}
+
+export interface FingerprintSyncPayload {
+  device_id: string
+  logs: Array<{
+    enrollNumber: string
+    timestamp: string
+    event_type: 'checkin' | 'checkout'
+  }>
+}

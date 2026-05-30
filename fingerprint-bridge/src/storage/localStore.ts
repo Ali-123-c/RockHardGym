@@ -1,8 +1,7 @@
-import Database from 'better-sqlite3'
+import fs from 'fs'
 import path from 'path'
 import { logger } from '../utils/logger'
 
-// Define the interface for an attendance log
 export interface LocalAttendanceLog {
   id?: number
   enrollNumber: string
@@ -11,56 +10,67 @@ export interface LocalAttendanceLog {
   synced: number // 0 for false, 1 for true
 }
 
-const dbPath = path.resolve(process.cwd(), 'local-sync.db')
-const db = new Database(dbPath)
+const dbPath = path.resolve(process.cwd(), 'local-sync.json')
 
-// Initialize database
 export function initDB() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS local_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      enrollNumber TEXT NOT NULL,
-      timestamp TEXT NOT NULL,
-      event_type TEXT NOT NULL,
-      synced INTEGER DEFAULT 0,
-      UNIQUE(enrollNumber, timestamp)
-    )
-  `)
-  logger.info('Local SQLite database initialized.')
+  if (!fs.existsSync(dbPath)) {
+    fs.writeFileSync(dbPath, JSON.stringify([]))
+  }
+  logger.info('Local JSON cache initialized.')
+}
+
+function readLogs(): LocalAttendanceLog[] {
+  try {
+    const data = fs.readFileSync(dbPath, 'utf8')
+    return JSON.parse(data)
+  } catch {
+    return []
+  }
+}
+
+function writeLogs(logs: LocalAttendanceLog[]) {
+  fs.writeFileSync(dbPath, JSON.stringify(logs, null, 2))
 }
 
 export function saveLogsLocally(logs: LocalAttendanceLog[]) {
-  const insert = db.prepare(`
-    INSERT OR IGNORE INTO local_logs (enrollNumber, timestamp, event_type, synced)
-    VALUES (@enrollNumber, @timestamp, @event_type, 0)
-  `)
-
-  const insertMany = db.transaction((logsToInsert: LocalAttendanceLog[]) => {
-    let count = 0
-    for (const log of logsToInsert) {
-      const result = insert.run(log)
-      if (result.changes > 0) count++
+  const currentLogs = readLogs()
+  let newRecords = 0
+  
+  for (const log of logs) {
+    // Check for duplicates
+    const isDuplicate = currentLogs.some(
+      l => l.enrollNumber === log.enrollNumber && l.timestamp === log.timestamp
+    )
+    if (!isDuplicate) {
+      currentLogs.push({ ...log, id: Date.now() + Math.floor(Math.random() * 1000) })
+      newRecords++
     }
-    return count
-  })
+  }
 
-  const newRecords = insertMany(logs)
   if (newRecords > 0) {
+    writeLogs(currentLogs)
     logger.info(`Saved ${newRecords} new logs locally.`)
   }
 }
 
 export function getUnsyncedLogs(): LocalAttendanceLog[] {
-  const stmt = db.prepare('SELECT id, enrollNumber, timestamp, event_type FROM local_logs WHERE synced = 0 LIMIT 500')
-  return stmt.all() as LocalAttendanceLog[]
+  const currentLogs = readLogs()
+  return currentLogs.filter(l => l.synced === 0).slice(0, 500)
 }
 
 export function markLogsAsSynced(ids: number[]) {
   if (ids.length === 0) return
 
-  const placeholders = ids.map(() => '?').join(',')
-  const stmt = db.prepare(`UPDATE local_logs SET synced = 1 WHERE id IN (${placeholders})`)
-  const result = stmt.run(...ids)
+  const currentLogs = readLogs()
+  let marked = 0
   
-  logger.info(`Marked ${result.changes} logs as synced in local DB.`)
+  for (const log of currentLogs) {
+    if (log.id && ids.includes(log.id)) {
+      log.synced = 1
+      marked++
+    }
+  }
+  
+  writeLogs(currentLogs)
+  logger.info(`Marked ${marked} logs as synced in local JSON DB.`)
 }

@@ -1,3 +1,4 @@
+// @ts-ignore
 import ZKLib from 'node-zklib'
 import { config } from '../config'
 import { logger } from '../utils/logger'

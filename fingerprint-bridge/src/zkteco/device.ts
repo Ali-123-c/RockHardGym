@@ -23,6 +23,7 @@ export interface ZkDeviceUser {
 export class ZKDevice {
   private zkInstance: any
   private isConnected = false
+  private realtimeStarted = false
 
   constructor() {
     this.zkInstance = new ZKLib(config.device.ip, config.device.port, 10000, 4000)
@@ -61,11 +62,32 @@ export class ZKDevice {
 
     try {
       const logs = await this.zkInstance.getAttendances()
-      return logs.data || []
+      return (logs.data || []).map((log: ZkAttendance) => ({
+        userSn: log.userSn,
+        deviceUserId: String(log.deviceUserId ?? '').replace(/\0/g, '').trim() || String(log.userSn ?? ''),
+        recordTime: log.recordTime,
+      }))
     } catch (error) {
       logger.error('Error fetching attendance logs:', error)
       return []
     }
+  }
+
+  startRealtimeListener(onScan: (log: { deviceUserId: string; userSn?: string; recordTime: Date }) => void) {
+    if (this.realtimeStarted || !this.isConnected) return
+
+    this.realtimeStarted = true
+    logger.info('Listening for real-time fingerprint scans on device...')
+
+    this.zkInstance.getRealTimeLogs((data: { userId?: string; attTime?: Date }) => {
+      const deviceUserId = String(data?.userId ?? '').replace(/\0/g, '').trim()
+      if (!deviceUserId || !data?.attTime) return
+
+      onScan({
+        deviceUserId,
+        recordTime: data.attTime,
+      })
+    })
   }
 
   async clearAttendanceLogs(): Promise<boolean> {

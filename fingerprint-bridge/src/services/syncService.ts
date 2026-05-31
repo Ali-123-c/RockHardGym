@@ -20,6 +20,38 @@ const apiClient = axios.create({
 
 let syncInProgress = false
 
+function formatLogFromDevice(log: { deviceUserId?: string | number; userSn?: string | number; recordTime: string | Date }) {
+  const enrollNumber = String(log.deviceUserId ?? '').trim() || String(log.userSn ?? '').trim()
+  return {
+    enrollNumber,
+    timestamp: new Date(log.recordTime).toISOString(),
+    event_type: 'checkin' as const,
+    synced: 0,
+  }
+}
+
+export async function pushLogsToApi(
+  logs: Array<{ enrollNumber: string; timestamp: string; event_type: 'checkin' | 'checkout' }>
+) {
+  if (logs.length === 0) return { success: true, synced: 0 }
+
+  const payload = {
+    device_id: config.device.id,
+    logs: logs.map((l) => ({
+      enrollNumber: l.enrollNumber,
+      timestamp: l.timestamp,
+      event_type: l.event_type,
+    })),
+  }
+
+  const response = await apiClient.post('/api/fingerprint/sync', payload)
+  if (!response.data.success) {
+    throw new Error(response.data.error || 'Unknown API Error')
+  }
+
+  return response.data as { success: boolean; synced: number; attendance_marked?: number; unmatched?: string[] }
+}
+
 export interface SyncResult {
   success: boolean
   fetched: number
@@ -51,13 +83,9 @@ export async function runSyncJob() {
     const rawLogs = await connectionManager.getAttendanceLogs()
     
     // Map to Local format
-    const formattedLogs = rawLogs.map(log => ({
-      enrollNumber: log.deviceUserId,
-      timestamp: new Date(log.recordTime).toISOString(),
-      // ZKTeco usually only gives checkin unless configured otherwise, we'll default to checkin
-      event_type: 'checkin' as const,
-      synced: 0
-    }))
+    const formattedLogs = rawLogs
+      .map((log) => formatLogFromDevice(log))
+      .filter((log) => log.enrollNumber)
 
     // 2. Save locally (handles duplicates gracefully via UNIQUE constraint)
     if (formattedLogs.length > 0) {
@@ -82,33 +110,27 @@ export async function runSyncJob() {
     // 4. Send to Gym API
     logger.info(`Sending ${unsyncedLogs.length} logs to Gym API...`)
     
-    const payload = {
-      device_id: config.device.id,
-      logs: unsyncedLogs.map(l => ({
-        enrollNumber: l.enrollNumber,
-        timestamp: l.timestamp,
-        event_type: l.event_type
-      }))
-    }
+    const apiLogs = unsyncedLogs.map((l) => ({
+      enrollNumber: l.enrollNumber,
+      timestamp: l.timestamp,
+      event_type: l.event_type,
+    }))
 
-    const response = await apiClient.post('/api/fingerprint/sync', payload)
-    
-    if (response.data.success) {
-      // 5. Mark as synced locally
-      const syncedIds = unsyncedLogs.map(l => l.id as number)
-      markLogsAsSynced(syncedIds)
-      logger.info(`Successfully synced ${response.data.synced} records to Main App.`)
+    const response = await pushLogsToApi(apiLogs)
 
-      await reportStatus('Online', Date.now() - startTime)
-      return {
-        success: true,
-        fetched: formattedLogs.length,
-        attempted: unsyncedLogs.length,
-        synced: response.data.synced || unsyncedLogs.length,
-        pending: getUnsyncedLogs().length
-      }
-    } else {
-      throw new Error(response.data.error || 'Unknown API Error')
+    const syncedIds = unsyncedLogs.map((l) => l.id as number)
+    markLogsAsSynced(syncedIds)
+    logger.info(
+      `Synced to app: ${response.synced} logs, ${response.attendance_marked ?? 0} attendance rows marked.`
+    )
+
+    await reportStatus('Online', Date.now() - startTime)
+    return {
+      success: true,
+      fetched: formattedLogs.length,
+      attempted: unsyncedLogs.length,
+      synced: response.synced || 0,
+      pending: getUnsyncedLogs().length,
     }
 
   } catch (error: any) {

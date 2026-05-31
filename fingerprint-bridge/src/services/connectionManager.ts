@@ -2,6 +2,7 @@ import { config } from '../config'
 import { logger } from '../utils/logger'
 import { SimulatorDevice } from '../zkteco/simulator'
 import { ZKDevice, ZkAttendance, ZkDeviceUser } from '../zkteco/device'
+import { handleRealtimeScan, isRealtimeListenerStarted, markRealtimeListenerStarted } from './realtimeSync'
 
 type BridgeDevice = {
   connect(): Promise<boolean>
@@ -11,6 +12,9 @@ type BridgeDevice = {
   getUsers(): Promise<ZkDeviceUser[]>
   upsertUser(params: { userId: string; name: string; uid?: number }): Promise<{ created: boolean; user: ZkDeviceUser }>
   startFingerprintEnrollment(userId: string, fingerIndex?: number): Promise<{ success: boolean; mode: string }>
+  startRealtimeListener?(
+    onScan: (log: { deviceUserId: string; userSn?: string; recordTime: Date }) => void
+  ): void
 }
 
 export interface ConnectionStatus {
@@ -89,6 +93,7 @@ class ConnectionManager {
       }
 
       logger.connection(`Device connection established at ${config.device.ip}:${config.device.port}`)
+      this.startRealtimeIfSupported()
       return true
     } catch (error: any) {
       this.status = {
@@ -167,6 +172,18 @@ class ConnectionManager {
       this.scheduleReconnect()
       throw error
     }
+  }
+
+  private startRealtimeIfSupported() {
+    if (isRealtimeListenerStarted()) return
+    if (typeof this.device.startRealtimeListener !== 'function') return
+
+    markRealtimeListenerStarted()
+    this.device.startRealtimeListener((log) => {
+      handleRealtimeScan(log).catch((error) => {
+        logger.error('Realtime attendance sync failed', error)
+      })
+    })
   }
 
   private scheduleReconnect() {

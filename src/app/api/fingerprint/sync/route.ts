@@ -1,9 +1,45 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { validateFingerprintApiKey } from '@/lib/fingerprint-auth'
+import {
+  buildMemberLookupMap,
+  localDateFromTimestamp,
+  normalizeEnrollKey,
+  resolveMemberForEnroll,
+  type MemberRow,
+} from '@/lib/member-enroll'
+
+async function markAttendance(
+  memberId: string,
+  timestamp: string
+): Promise<'created' | 'exists' | 'error'> {
+  const scanDate = localDateFromTimestamp(timestamp)
+
+  const { data: existing } = await supabase
+    .from('attendance')
+    .select('id')
+    .eq('member_id', memberId)
+    .eq('date', scanDate)
+    .maybeSingle()
+
+  if (existing) return 'exists'
+
+  const { error } = await supabase.from('attendance').insert({
+    member_id: memberId,
+    scan_time: timestamp,
+    date: scanDate,
+  })
+
+  if (error) {
+    if (error.code === '23505') return 'exists'
+    console.error('Attendance insert failed:', error)
+    return 'error'
+  }
+
+  return 'created'
+}
 
 export async function POST(req: Request) {
-  // 1. Validate API Key
   const authError = validateFingerprintApiKey(req)
   if (authError) return authError
 
@@ -15,80 +51,81 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Invalid payload' }, { status: 400 })
     }
 
-    let recordsSynced = 0
-    let errors = []
-
-    // 2. Fetch members by membership_no to map enrollNumber to member_id
-    const enrollNumbers = [...new Set(logs.map((l: any) => l.enrollNumber))]
-    const { data: members, error: memberError } = await supabase
+    const { data: allMembers, error: memberError } = await supabase
       .from('members')
-      .select('id, membership_no, name')
-      .in('membership_no', enrollNumbers)
-    
+      .select('id, membership_no, name, status')
+
     if (memberError) {
       console.error('Error fetching members:', memberError)
     }
 
-    const memberMap = new Map(members?.map(m => [m.membership_no, { id: m.id, name: m.name }]) || [])
+    const memberMap = buildMemberLookupMap((allMembers || []) as MemberRow[])
+    let recordsSynced = 0
+    let attendanceMarked = 0
+    const errors: string[] = []
+    const unmatched = new Set<string>()
 
-    // 3. Insert Logs
     for (const log of logs) {
-      const memberInfo = memberMap.get(log.enrollNumber.toString())
+      const enrollKey = normalizeEnrollKey(log.enrollNumber)
+      if (!enrollKey) {
+        errors.push('Skipped log with empty enrollNumber')
+        continue
+      }
+
+      const memberInfo = resolveMemberForEnroll(memberMap, log.enrollNumber)
       const memberId = memberInfo?.id || null
-      const memberName = memberInfo?.name || `Unknown (${log.enrollNumber})`
+      const memberName = memberInfo?.name || `Unknown (${enrollKey})`
       const eventType = log.event_type || 'checkin'
 
-      const { error: insertError } = await supabase
-        .from('attendance_logs')
-        .insert({
-          member_id: memberId,
-          member_name: memberName,
-          device_id,
-          event_type: eventType,
-          timestamp: log.timestamp
-        })
+      if (!memberInfo) {
+        unmatched.add(enrollKey)
+      }
 
-      if (insertError) {
-        // Suppress duplicate errors from the UNIQUE constraint
-        if (insertError.code !== '23505') {
-          errors.push(`Failed for ${log.enrollNumber}: ${insertError.message}`)
-        }
-      } else {
+      const { error: insertError } = await supabase.from('attendance_logs').insert({
+        member_id: memberId,
+        member_name: memberName,
+        device_id,
+        event_type: eventType,
+        timestamp: log.timestamp,
+      })
+
+      const isDuplicateLog = insertError?.code === '23505'
+
+      if (insertError && !isDuplicateLog) {
+        errors.push(`Log ${enrollKey}: ${insertError.message}`)
+        continue
+      }
+
+      if (!insertError) {
         recordsSynced++
-        
-        // Also insert into main attendance table if checkin and member exists
-        if (memberId && eventType === 'checkin') {
-          const scanDate = new Date(log.timestamp).toISOString().split('T')[0]
-          const { data: existing } = await supabase
-            .from('attendance')
-            .select('id')
-            .eq('member_id', memberId)
-            .eq('date', scanDate)
-            .maybeSingle()
+      }
 
-          if (!existing) {
-            await supabase.from('attendance').insert({
-              member_id: memberId,
-              scan_time: log.timestamp,
-              date: scanDate,
-            })
-          }
-        }
+      if (memberId && eventType === 'checkin') {
+        const result = await markAttendance(memberId, log.timestamp)
+        if (result === 'created') attendanceMarked++
       }
     }
 
-    // 4. Record Sync Log
-    const syncStatus = errors.length === 0 ? 'Success' : recordsSynced > 0 ? 'Partial' : 'Failed'
+    const syncStatus =
+      errors.length === 0 ? 'Success' : recordsSynced > 0 || attendanceMarked > 0 ? 'Partial' : 'Failed'
     const errorMessage = errors.length > 0 ? errors.join(' | ').substring(0, 500) : null
+    const unmatchedList = [...unmatched]
+
+    if (unmatchedList.length > 0) {
+      console.warn('Unmatched device user IDs (no membership_no):', unmatchedList.join(', '))
+    }
 
     await supabase.from('sync_logs').insert({
       device_id,
       sync_status: syncStatus,
       records_synced: recordsSynced,
-      error_message: errorMessage
+      error_message:
+        errorMessage ||
+        (unmatchedList.length > 0
+          ? `Unmatched device IDs: ${unmatchedList.join(', ').substring(0, 400)}`
+          : null),
     })
 
-    // Update Device last_sync
     await supabase
       .from('fingerprint_devices')
       .update({ last_sync: new Date().toISOString(), status: 'Online' })
@@ -97,9 +134,10 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       synced: recordsSynced,
-      errors: errors.length > 0 ? errors : undefined
+      attendance_marked: attendanceMarked,
+      unmatched: unmatchedList.length > 0 ? unmatchedList : undefined,
+      errors: errors.length > 0 ? errors : undefined,
     })
-
   } catch (error: any) {
     console.error('Sync Error:', error)
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })

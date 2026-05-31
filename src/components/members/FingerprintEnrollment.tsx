@@ -102,7 +102,11 @@ export function FingerprintEnrollment({ memberId, membershipNo, memberName }: Pr
         <li>Click <strong>Register on device</strong> (creates user ID {membershipNo}).</li>
         <li>Click <strong>Start fingerprint enroll</strong> — device enters enroll mode.</li>
         <li>Scan the <strong>same finger 3 times</strong> on the scanner.</li>
-        <li>Member scans daily — attendance syncs every 5 minutes (or use Sync now).</li>
+        <li>Member scans daily — attendance appears within ~1 minute (realtime) or click Sync now.</li>
+        <li>
+          Device user ID and <strong>membership number</strong> must match exactly (e.g. both{' '}
+          <span className="font-mono">{membershipNo}</span>).
+        </li>
       </ol>
 
       <div className="flex flex-wrap gap-3">

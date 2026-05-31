@@ -99,6 +99,21 @@ export function markLogsAsSynced(ids: number[]) {
   logger.info(`Marked ${marked} logs as synced in local JSON DB.`)
 }
 
+export function markLogsSyncedByKey(enrollNumber: string, timestamp: string) {
+  const currentLogs = readLogs()
+  let marked = 0
+
+  for (const log of currentLogs) {
+    if (log.enrollNumber === enrollNumber && log.timestamp === timestamp && log.synced === 0) {
+      log.synced = 1
+      log.updated_at = new Date().toISOString()
+      marked++
+    }
+  }
+
+  if (marked > 0) writeLogs(currentLogs)
+}
+
 export function markLogsAsFailed(ids: number[], errorMessage: string) {
   if (ids.length === 0) return
 

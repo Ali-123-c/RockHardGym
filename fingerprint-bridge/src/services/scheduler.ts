@@ -23,4 +23,9 @@ export function startScheduler() {
     logger.info('--- Scheduled Sync Triggered ---')
     runSyncJob()
   })
+
+  setInterval(() => {
+    logger.info('--- Retry Sync Triggered ---')
+    runSyncJob()
+  }, config.sync.retryIntervalMs)
 }

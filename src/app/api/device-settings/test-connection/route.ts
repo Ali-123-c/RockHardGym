@@ -48,9 +48,15 @@ export async function POST(request: NextRequest) {
       if (deviceError) throw deviceError
     }
 
+    const message = result.status === 'Online'
+      ? result.portReachable
+        ? 'Device is online and ZKTeco port responded'
+        : 'Device is online on the LAN; ZKTeco port did not answer the SDK probe'
+      : result.error || 'Device is offline'
+
     return NextResponse.json({
       success: true,
-      message: result.status === 'Online' ? 'Device is online' : 'Device is offline',
+      message,
       result,
     })
   } catch (error: any) {

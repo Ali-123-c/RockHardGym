@@ -1,297 +1,430 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '@/lib/supabase-browser'
-import { 
-  Fingerprint, Signal, SignalZero, SignalHigh, 
-  RefreshCw, Activity, Clock, ShieldCheck,
-  Server, HardDrive, Wifi, WifiOff, AlertCircle, Users
+import type { FormEvent, ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  Activity,
+  CheckCircle2,
+  Clock,
+  Fingerprint,
+  Loader2,
+  Network,
+  PlugZap,
+  Save,
+  Server,
+  Settings,
+  Timer,
+  Wifi,
+  WifiOff,
+  XCircle,
 } from 'lucide-react'
 
-const formatDate = (date: Date, pattern: 'hh:mm a' | 'MMM d, yyyy HH:mm:ss' | 'HH:mm:ss') => {
-  if (pattern === 'hh:mm a') {
-    return new Intl.DateTimeFormat('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    }).format(date)
-  }
+type DeviceStatus = 'Online' | 'Offline' | 'Error'
 
-  if (pattern === 'HH:mm:ss') {
-    return new Intl.DateTimeFormat('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    }).format(date)
-  }
+interface DeviceSettings {
+  id?: string
+  device_name: string
+  device_model?: string
+  ip_address: string
+  port: number
+  device_number: number
+  communication_key: number
+  status?: DeviceStatus
+  last_checked_at?: string | null
+  last_response_time_ms?: number | null
+}
 
-  const monthDayYear = new Intl.DateTimeFormat('en-US', {
+interface HealthLog {
+  id: string
+  status: DeviceStatus
+  response_time: number | null
+  created_at: string
+}
+
+interface ConnectionResult {
+  status: 'Online' | 'Offline'
+  pingReachable: boolean
+  portReachable: boolean
+  responseTime: number | null
+  checkedAt: string
+  error?: string
+}
+
+const defaultDevice: DeviceSettings = {
+  device_name: 'ZKTeco K70',
+  device_model: 'ZKTeco K70',
+  ip_address: '192.168.100.16',
+  port: 4370,
+  device_number: 1,
+  communication_key: 0,
+  status: 'Offline',
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return 'Never'
+
+  return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-  }).format(date)
-  const time = new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
-  }).format(date)
-
-  return `${monthDayYear} ${time}`
+  }).format(new Date(value))
 }
 
-export default function FingerprintDashboard() {
-  const [supabase] = useState(() => createClient())
-  const [devices, setDevices] = useState<any[]>([])
-  const [syncLogs, setSyncLogs] = useState<any[]>([])
-  const [attendanceToday, setAttendanceToday] = useState(0)
+function StatusPill({ status }: { status?: DeviceStatus }) {
+  const online = status === 'Online'
+
+  return (
+    <span
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-semibold ${
+        online
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+          : 'border-rose-200 bg-rose-50 text-rose-700'
+      }`}
+    >
+      {online ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
+      {status || 'Offline'}
+    </span>
+  )
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <label className="space-y-2">
+      <span className="text-sm font-semibold text-slate-700">{label}</span>
+      {children}
+    </label>
+  )
+}
+
+export default function DeviceSettingsPage() {
+  const [device, setDevice] = useState<DeviceSettings>(defaultDevice)
+  const [healthLogs, setHealthLogs] = useState<HealthLog[]>([])
   const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [lastResult, setLastResult] = useState<ConnectionResult | null>(null)
 
-  const fetchData = useCallback(async () => {
+  const loadSettings = useCallback(async () => {
     try {
-      // Fetch devices
-      const { data: dData } = await supabase.from('fingerprint_devices').select('*').order('created_at', { ascending: false })
-      if (dData) setDevices(dData)
+      const response = await fetch('/api/device-settings', { cache: 'no-store' })
+      const payload = await response.json()
 
-      // Fetch logs
-      const { data: lData } = await supabase.from('sync_logs').select('*').order('created_at', { ascending: false }).limit(5)
-      if (lData) setSyncLogs(lData)
+      if (!payload.success) throw new Error(payload.error || 'Unable to load device settings')
 
-      // Fetch today's attendance
-      const today = new Date().toISOString().split('T')[0]
-      const { count } = await supabase
-        .from('attendance_logs')
-        .select('*', { count: 'exact', head: true })
-        .gte('timestamp', `${today}T00:00:00.000Z`)
-      
-      setAttendanceToday(count || 0)
-    } catch (err) {
-      console.error('Error fetching data', err)
+      setDevice({
+        ...defaultDevice,
+        ...payload.device,
+        port: Number(payload.device.port ?? defaultDevice.port),
+        device_number: Number(payload.device.device_number ?? defaultDevice.device_number),
+        communication_key: Number(payload.device.communication_key ?? defaultDevice.communication_key),
+      })
+      setHealthLogs(payload.health_logs || [])
+    } catch (error: any) {
+      setNotice({ type: 'error', text: error.message || 'Unable to load device settings' })
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
-    fetchData()
-    // Setup realtime subscription for logs
-    const channel = supabase
-      .channel('fingerprint_updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => {
-        fetchData()
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sync_logs' }, () => {
-        fetchData()
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'fingerprint_devices' }, () => {
-        fetchData()
-      })
-      .subscribe()
+    loadSettings()
+  }, [loadSettings])
 
-    return () => {
-      supabase.removeChannel(channel)
+  const healthSummary = useMemo(() => {
+    const checkedAt = lastResult?.checkedAt || device.last_checked_at
+    const responseTime = lastResult?.responseTime ?? device.last_response_time_ms ?? null
+    const status = lastResult?.status || device.status || 'Offline'
+
+    return { checkedAt, responseTime, status }
+  }, [device.last_checked_at, device.last_response_time_ms, device.status, lastResult])
+
+  const updateField = (field: keyof DeviceSettings, value: string) => {
+    const numericFields = new Set<keyof DeviceSettings>(['port', 'device_number', 'communication_key'])
+    setDevice((current) => ({
+      ...current,
+      [field]: numericFields.has(field) ? Number(value) : value,
+    }))
+  }
+
+  const saveSettings = async (event?: FormEvent) => {
+    event?.preventDefault()
+    setSaving(true)
+    setNotice(null)
+
+    try {
+      const response = await fetch('/api/device-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(device),
+      })
+      const payload = await response.json()
+
+      if (!payload.success) throw new Error(payload.error || 'Unable to save device settings')
+
+      setDevice((current) => ({ ...current, ...payload.device }))
+      setNotice({ type: 'success', text: 'Device settings saved.' })
+    } catch (error: any) {
+      setNotice({ type: 'error', text: error.message || 'Unable to save device settings' })
+    } finally {
+      setSaving(false)
     }
-  }, [fetchData, supabase])
+  }
 
-  const handleManualSync = async () => {
-    setSyncing(true)
-    // In a real scenario, this would trigger the Bridge service or API.
-    // For now, we simulate the action feedback.
-    setTimeout(() => {
-      setSyncing(false)
-      fetchData()
-    }, 2000)
+  const testConnection = async () => {
+    setTesting(true)
+    setNotice(null)
+
+    try {
+      let savedDevice = device
+
+      if (!device.id) {
+        const response = await fetch('/api/device-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(device),
+        })
+        const payload = await response.json()
+        if (!payload.success) throw new Error(payload.error || 'Unable to save device before testing')
+        savedDevice = payload.device
+        setDevice(savedDevice)
+      }
+
+      const response = await fetch('/api/device-settings/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(savedDevice),
+      })
+      const payload = await response.json()
+
+      if (!payload.success) throw new Error(payload.error || 'Connection test failed')
+
+      setLastResult(payload.result)
+      setDevice((current) => ({
+        ...current,
+        status: payload.result.status,
+        last_checked_at: payload.result.checkedAt,
+        last_response_time_ms: payload.result.responseTime,
+      }))
+      setNotice({
+        type: payload.result.status === 'Online' ? 'success' : 'error',
+        text: payload.message,
+      })
+      await loadSettings()
+    } catch (error: any) {
+      setNotice({ type: 'error', text: error.message || 'Connection test failed' })
+    } finally {
+      setTesting(false)
+    }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-20">
-      {/* Header section */}
-      <div className="bg-white border-b border-slate-200 pt-8 pb-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <main className="min-h-screen bg-slate-50 pb-16">
+      <section className="border-b border-slate-200 bg-white px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
-              <div className="p-2 bg-indigo-100 rounded-xl">
-                <Fingerprint className="w-8 h-8 text-indigo-600" />
-              </div>
-              Device Management
-            </h1>
-            <p className="mt-2 text-slate-500 max-w-2xl text-lg">
-              Monitor and manage biometric attendance devices connected to the network.
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-700">
+              <Fingerprint className="h-4 w-4" />
+              ZKTeco K70
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-950">Device Settings</h1>
+            <p className="mt-2 max-w-2xl text-slate-500">
+              Configure the fingerprint device, test LAN connectivity, and monitor recent health checks.
             </p>
           </div>
-          <div className="flex gap-3">
-            <button 
-              onClick={handleManualSync}
-              disabled={syncing}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border-2 border-indigo-100 text-indigo-600 font-semibold hover:bg-indigo-50 hover:border-indigo-200 transition-all active:scale-95 disabled:opacity-50"
+          <div className="flex items-center gap-3">
+            <StatusPill status={healthSummary.status as DeviceStatus} />
+            <button
+              type="button"
+              onClick={testConnection}
+              disabled={testing || saving}
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <RefreshCw className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? 'Syncing...' : 'Manual Sync'}
-            </button>
-            <button className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95">
-              <Server className="w-5 h-5" />
-              Add Device
+              {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
+              Test Connection
             </button>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8">
-        {/* KPI Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-5 hover:shadow-md transition-shadow">
-            <div className="p-4 bg-emerald-100 rounded-2xl">
-              <SignalHigh className="w-8 h-8 text-emerald-600" />
-            </div>
+      <section className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.8fr)] lg:px-8">
+        <form onSubmit={saveSettings} className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-6 flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-slate-500">Active Devices</p>
-              <p className="text-3xl font-bold text-slate-900">{devices.filter(d => d.status === 'Online').length} <span className="text-lg text-slate-400 font-medium">/ {devices.length}</span></p>
+              <h2 className="flex items-center gap-2 text-xl font-bold text-slate-950">
+                <Settings className="h-5 w-5 text-indigo-600" />
+                Connection Configuration
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">Default values are prefilled for the K70 on your network.</p>
             </div>
-          </div>
-          
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-5 hover:shadow-md transition-shadow">
-            <div className="p-4 bg-blue-100 rounded-2xl">
-              <Users className="w-8 h-8 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Today&apos;s Check-ins</p>
-              <p className="text-3xl font-bold text-slate-900">{attendanceToday}</p>
-            </div>
+            <button
+              type="submit"
+              disabled={saving || testing}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save
+            </button>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-5 hover:shadow-md transition-shadow">
-            <div className="p-4 bg-purple-100 rounded-2xl">
-              <Activity className="w-8 h-8 text-purple-600" />
+          {notice && (
+            <div
+              className={`mb-5 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium ${
+                notice.type === 'success'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border-rose-200 bg-rose-50 text-rose-700'
+              }`}
+            >
+              {notice.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+              {notice.text}
             </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Last Network Sync</p>
-              <p className="text-xl font-bold text-slate-900">
-                {devices[0]?.last_sync ? formatDate(new Date(devices[0].last_sync), 'hh:mm a') : 'Never'}
-              </p>
-            </div>
-          </div>
-        </div>
+          )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content - Devices */}
-          <div className="lg:col-span-2 space-y-6">
-            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <HardDrive className="w-5 h-5 text-slate-400" />
-              Connected Hardware
+          <div className="grid gap-5 md:grid-cols-2">
+            <Field label="Device Name">
+              <input
+                value={device.device_name}
+                onChange={(event) => updateField('device_name', event.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                placeholder="ZKTeco K70"
+              />
+            </Field>
+            <Field label="Device IP">
+              <input
+                value={device.ip_address}
+                onChange={(event) => updateField('ip_address', event.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 font-mono text-sm text-slate-900 transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                placeholder="192.168.100.16"
+              />
+            </Field>
+            <Field label="Device Port">
+              <input
+                type="number"
+                min={1}
+                max={65535}
+                value={device.port}
+                onChange={(event) => updateField('port', event.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+              />
+            </Field>
+            <Field label="Device ID">
+              <input
+                type="number"
+                min={0}
+                value={device.device_number}
+                onChange={(event) => updateField('device_number', event.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+              />
+            </Field>
+            <Field label="Communication Key">
+              <input
+                type="number"
+                min={0}
+                value={device.communication_key}
+                onChange={(event) => updateField('communication_key', event.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+              />
+            </Field>
+          </div>
+        </form>
+
+        <aside className="space-y-6">
+          <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-slate-950">
+              <Activity className="h-5 w-5 text-indigo-600" />
+              Device Health
             </h2>
-            
-            {devices.length === 0 ? (
-              <div className="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center">
-                <ShieldCheck className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-slate-900">No devices configured</h3>
-                <p className="text-slate-500 mt-1">Add a ZKTeco K70 to start recording biometric attendance.</p>
+            <div className="mt-5 grid gap-4">
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 p-4">
+                <span className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                  <Server className="h-4 w-4" />
+                  Status
+                </span>
+                <StatusPill status={healthSummary.status as DeviceStatus} />
               </div>
-            ) : (
-              devices.map(device => (
-                <div key={device.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden">
-                  <div className={`absolute top-0 left-0 w-1.5 h-full ${device.status === 'Online' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                  
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div>
-                      <div className="flex items-center gap-3 mb-1">
-                        <h3 className="text-xl font-bold text-slate-900">{device.device_name}</h3>
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                          device.status === 'Online' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-                        }`}>
-                          {device.status === 'Online' ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-                          {device.status}
-                        </span>
-                      </div>
-                      <p className="text-slate-500 text-sm flex items-center gap-2">
-                        <span>{device.device_model}</span>
-                        <span>•</span>
-                        <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">{device.ip_address}:{device.port}</span>
-                      </p>
-                    </div>
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 p-4">
+                <span className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                  <Timer className="h-4 w-4" />
+                  Response Time
+                </span>
+                <span className="font-mono text-sm font-bold text-slate-900">
+                  {healthSummary.responseTime === null ? 'N/A' : `${healthSummary.responseTime} ms`}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 p-4">
+                <span className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                  <Clock className="h-4 w-4" />
+                  Last Checked
+                </span>
+                <span className="text-right text-sm font-semibold text-slate-900">{formatDate(healthSummary.checkedAt)}</span>
+              </div>
+            </div>
 
-                    <div className="flex gap-2 w-full sm:w-auto">
-                      <button className="flex-1 sm:flex-none px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl text-sm transition-colors">
-                        Configure
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 pt-6 border-t border-slate-100 grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Last Sync</p>
-                      <p className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                        <Clock className="w-4 h-4 text-slate-400" />
-                        {device.last_sync ? formatDate(new Date(device.last_sync), 'MMM d, yyyy HH:mm:ss') : 'Unknown'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Sync Schedule</p>
-                      <p className="text-sm font-semibold text-slate-700">Every 5 minutes</p>
-                    </div>
-                  </div>
+            {lastResult && (
+              <div className="mt-5 grid gap-3 border-t border-slate-100 pt-5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2 font-semibold text-slate-600">
+                    <Network className="h-4 w-4" />
+                    Ping
+                  </span>
+                  <span className={lastResult.pingReachable ? 'font-bold text-emerald-600' : 'font-bold text-rose-600'}>
+                    {lastResult.pingReachable ? 'Reachable' : 'Unreachable'}
+                  </span>
                 </div>
-              ))
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2 font-semibold text-slate-600">
+                    <PlugZap className="h-4 w-4" />
+                    Port {device.port}
+                  </span>
+                  <span className={lastResult.portReachable ? 'font-bold text-emerald-600' : 'font-bold text-rose-600'}>
+                    {lastResult.portReachable ? 'Open' : 'Closed'}
+                  </span>
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Sidebar - Sync Logs */}
-          <div className="space-y-6">
-            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-slate-400" />
-              Recent Sync Activity
-            </h2>
-            
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-              {syncLogs.length === 0 ? (
-                <div className="p-8 text-center">
-                  <p className="text-slate-500">No sync logs available.</p>
-                </div>
+          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 p-5">
+              <h2 className="text-lg font-bold text-slate-950">Recent Health Logs</h2>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {healthLogs.length === 0 ? (
+                <p className="p-5 text-sm text-slate-500">No health checks recorded yet.</p>
               ) : (
-                <div className="divide-y divide-slate-100">
-                  {syncLogs.map((log) => (
-                    <div key={log.id} className="p-4 hover:bg-slate-50 transition-colors">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium ${
-                          log.sync_status === 'Success' ? 'bg-emerald-100 text-emerald-800' : 
-                          log.sync_status === 'Partial' ? 'bg-amber-100 text-amber-800' : 
-                          'bg-rose-100 text-rose-800'
-                        }`}>
-                          {log.sync_status}
-                        </span>
-                        <span className="text-xs text-slate-400 font-medium">
-                          {formatDate(new Date(log.created_at), 'HH:mm:ss')}
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-600">
-                        <span className="font-semibold text-slate-900">{log.records_synced}</span> records synced
-                      </p>
-                      {log.error_message && (
-                        <p className="text-xs text-rose-600 mt-1 flex items-start gap-1">
-                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                          {log.error_message}
-                        </p>
-                      )}
+                healthLogs.map((log) => (
+                  <div key={log.id} className="flex items-center justify-between gap-4 p-4">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">{log.status}</p>
+                      <p className="text-xs text-slate-500">{formatDate(log.created_at)}</p>
                     </div>
-                  ))}
-                </div>
+                    <span className="font-mono text-sm font-semibold text-slate-700">
+                      {log.response_time === null ? 'N/A' : `${log.response_time} ms`}
+                    </span>
+                  </div>
+                ))
               )}
-              <div className="p-3 bg-slate-50 border-t border-slate-100 text-center">
-                <button className="text-sm font-medium text-indigo-600 hover:text-indigo-700">View All Logs</button>
-              </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+        </aside>
+      </section>
+    </main>
   )
 }

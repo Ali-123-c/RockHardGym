@@ -111,9 +111,13 @@ export interface FingerprintDevice {
   device_model: string
   ip_address: string
   port: number
+  device_number: number
+  communication_key: number
   communication_password?: string
   status: 'Online' | 'Offline' | 'Error'
   last_sync?: string
+  last_checked_at?: string
+  last_response_time_ms?: number
   created_at?: string
   updated_at?: string
 }

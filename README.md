@@ -147,3 +147,7 @@ For Tailwind CSS: https://tailwindcss.com/docs
 ## Fingerprint (single PC)
 
 See [SINGLE_PC_SETUP.md](SINGLE_PC_SETUP.md) for one-computer reception desk setup with the ZKTeco bridge.
+
+## Deploy on Vercel
+
+See [VERCEL_DEPLOY.md](VERCEL_DEPLOY.md) for production deploy + local bridge configuration.

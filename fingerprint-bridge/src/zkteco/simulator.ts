@@ -62,4 +62,29 @@ export class SimulatorDevice {
     logger.info('[SIMULATOR] Cleared simulated attendance logs')
     return true
   }
+
+  async getUsers() {
+    return this.sampleMembers.map((userId, index) => ({
+      uid: index + 1,
+      role: 0,
+      name: `Sim ${userId}`,
+      userId,
+      cardno: 0,
+    }))
+  }
+
+  async upsertUser(params: { userId: string; name: string }) {
+    if (!this.sampleMembers.includes(params.userId)) {
+      this.sampleMembers.push(params.userId)
+    }
+    return {
+      created: true,
+      user: { uid: this.sampleMembers.length, role: 0, name: params.name, userId: params.userId, cardno: 0 },
+    }
+  }
+
+  async startFingerprintEnrollment() {
+    logger.info('[SIMULATOR] Enrollment mode started — scan simulated')
+    return { success: true, mode: 'simulator' }
+  }
 }

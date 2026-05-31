@@ -128,13 +128,14 @@ export async function testDeviceConnection(config: DeviceConnectionConfig): Prom
     ? { reachable: false, responseTime: null as number | null, error: undefined as string | undefined }
     : await checkZktecoUdp(config.ipAddress, config.port)
   const portReachable = port.reachable || zkteco.reachable
-  const online = ping.reachable
+  // ZKTeco devices often block ICMP ping; TCP/UDP on 4370 is the real connectivity signal.
+  const online = portReachable
   const transport = port.reachable ? 'tcp' : zkteco.reachable ? 'udp' : null
-  const error = !ping.reachable
-    ? `Device IP ${config.ipAddress} did not respond to ping`
-    : !portReachable
-      ? `Device is reachable on the LAN, but ZKTeco port ${config.port} did not answer the SDK probe`
-      : undefined
+  const error = !portReachable
+    ? ping.reachable
+      ? `Device IP responds to ping, but ZKTeco port ${config.port} is closed or blocked`
+      : `Device IP ${config.ipAddress} is unreachable (ping failed and port ${config.port} is closed)`
+    : undefined
 
   return {
     status: online ? 'Online' : 'Offline',

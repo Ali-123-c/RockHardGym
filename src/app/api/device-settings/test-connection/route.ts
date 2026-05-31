@@ -50,7 +50,9 @@ export async function POST(request: NextRequest) {
 
     const message = result.status === 'Online'
       ? result.portReachable
-        ? 'Device is online and ZKTeco port responded'
+        ? result.pingReachable
+          ? 'Device is online (ping and ZKTeco port OK)'
+          : 'Device is online via ZKTeco port (ping blocked — normal for many devices)'
         : 'Device is online on the LAN; ZKTeco port did not answer the SDK probe'
       : result.error || 'Device is offline'
 

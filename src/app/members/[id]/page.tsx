@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, use } from 'react'
 import { ArrowLeft, Clock, Activity, Calendar, Phone, MapPin, CreditCard, CheckCircle2, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import { FingerprintEnrollment } from '@/components/members/FingerprintEnrollment'
 
 export default function MemberDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const unwrappedParams = use(params)
@@ -180,6 +181,14 @@ export default function MemberDetailsPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
           </div>
+        </div>
+
+        <div className={`mb-8 transition-all duration-500 delay-75 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+          <FingerprintEnrollment
+            memberId={member.id}
+            membershipNo={member.membership_no}
+            memberName={member.name}
+          />
         </div>
 
         {/* Stats Grid */}

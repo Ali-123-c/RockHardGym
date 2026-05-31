@@ -91,9 +91,15 @@ npm run dev
 | Manual sync | `Invoke-WebRequest -Method POST http://localhost:5050/sync-attendance` |
 | Scan test | Scan finger on device, wait up to 5 min (or run manual sync) |
 
-## 7. Member IDs
+## 7. Register fingerprint & mark attendance
 
-Device user ID must equal **`membership_no`** in GymFlow (e.g. device user `1001` → member `1001`).
+1. Add member in **Members** (note the **membership number**, e.g. `1001`).
+2. Open the member profile → **Fingerprint enrollment** section.
+3. Click **Register on device** (creates user on ZKTeco with that ID).
+4. Click **Start fingerprint enroll** → scan the **same finger 3 times** on the device.
+5. Member scans at the gym → bridge syncs every 5 min, or click **Sync attendance now**.
+
+Device user ID must equal **`membership_no`** (e.g. `1001` on device = member `1001` in the app).
 
 ## Troubleshooting
 

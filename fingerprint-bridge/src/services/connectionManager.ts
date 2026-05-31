@@ -1,13 +1,16 @@
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { SimulatorDevice } from '../zkteco/simulator'
-import { ZKDevice, ZkAttendance } from '../zkteco/device'
+import { ZKDevice, ZkAttendance, ZkDeviceUser } from '../zkteco/device'
 
 type BridgeDevice = {
   connect(): Promise<boolean>
   disconnect(): Promise<void>
   getAttendanceLogs(): Promise<Array<ZkAttendance | { deviceUserId: string; recordTime: string }>>
   clearAttendanceLogs(): Promise<boolean>
+  getUsers(): Promise<ZkDeviceUser[]>
+  upsertUser(params: { userId: string; name: string; uid?: number }): Promise<{ created: boolean; user: ZkDeviceUser }>
+  startFingerprintEnrollment(userId: string, fingerIndex?: number): Promise<{ success: boolean; mode: string }>
 }
 
 export interface ConnectionStatus {
@@ -116,6 +119,29 @@ class ConnectionManager {
       }
       logger.connection('Device disconnected')
     }
+  }
+
+  private async ensureConnected() {
+    const connected = this.status.connected || (await this.connect())
+    if (!connected) {
+      throw new Error(this.status.lastError || 'Device is offline')
+    }
+  }
+
+  async getDeviceUsers() {
+    await this.ensureConnected()
+    return this.device.getUsers()
+  }
+
+  async registerMemberOnDevice(params: { userId: string; name: string }) {
+    await this.ensureConnected()
+    const user = await this.device.upsertUser(params)
+    return user
+  }
+
+  async startMemberEnrollment(userId: string, fingerIndex = 0) {
+    await this.ensureConnected()
+    return this.device.startFingerprintEnrollment(userId, fingerIndex)
   }
 
   async getAttendanceLogs() {

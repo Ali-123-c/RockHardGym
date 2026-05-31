@@ -75,6 +75,65 @@ export function startApiServer() {
         return
       }
 
+      if (method === 'GET' && url.pathname === '/device-users') {
+        const users = await connectionManager.getDeviceUsers()
+        sendJson(response, 200, { success: true, count: users.length, users })
+        return
+      }
+
+      if (method === 'GET' && url.pathname === '/device-users/check') {
+        const userId = url.searchParams.get('userId')?.trim()
+        if (!userId) {
+          sendJson(response, 400, { success: false, error: 'userId is required' })
+          return
+        }
+        const users = await connectionManager.getDeviceUsers()
+        const match = users.find(
+          (user) => user.userId === userId || user.userId === String(Number(userId))
+        )
+        sendJson(response, 200, {
+          success: true,
+          userId,
+          onDevice: Boolean(match),
+          user: match ?? null,
+        })
+        return
+      }
+
+      if (method === 'POST' && url.pathname === '/enroll/register') {
+        const body = JSON.parse((await readBody(request)) || '{}')
+        const userId = String(body.userId || '').trim()
+        const name = String(body.name || '').trim()
+        if (!userId || !name) {
+          sendJson(response, 400, { success: false, error: 'userId and name are required' })
+          return
+        }
+        const result = await connectionManager.registerMemberOnDevice({ userId, name })
+        sendJson(response, 200, { success: true, ...result })
+        return
+      }
+
+      if (method === 'POST' && url.pathname === '/enroll/start') {
+        const body = JSON.parse((await readBody(request)) || '{}')
+        const userId = String(body.userId || '').trim()
+        const name = String(body.name || '').trim()
+        const fingerIndex = Number(body.fingerIndex ?? 0)
+        if (!userId) {
+          sendJson(response, 400, { success: false, error: 'userId is required' })
+          return
+        }
+        if (name) {
+          await connectionManager.registerMemberOnDevice({ userId, name })
+        }
+        const enroll = await connectionManager.startMemberEnrollment(userId, fingerIndex)
+        sendJson(response, 200, {
+          success: true,
+          message: 'Device is ready — place the same finger 3 times on the scanner',
+          enroll,
+        })
+        return
+      }
+
       sendJson(response, 404, {
         success: false,
         error: 'Route not found'
@@ -93,6 +152,9 @@ export function startApiServer() {
     logger.info(`GET  http://localhost:${config.service.port}/health`)
     logger.info(`GET  http://localhost:${config.service.port}/device-status`)
     logger.info(`POST http://localhost:${config.service.port}/sync-attendance`)
+    logger.info(`GET  http://localhost:${config.service.port}/device-users`)
+    logger.info(`POST http://localhost:${config.service.port}/enroll/register`)
+    logger.info(`POST http://localhost:${config.service.port}/enroll/start`)
   })
 
   return server

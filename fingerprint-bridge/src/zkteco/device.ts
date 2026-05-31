@@ -1,12 +1,23 @@
 // @ts-ignore
 import ZKLib from 'node-zklib'
+// @ts-ignore
+import { COMMANDS } from 'node-zklib/constants'
 import { config } from '../config'
 import { logger } from '../utils/logger'
+import { encodeUserData72 } from './userCodec'
 
 export interface ZkAttendance {
   userSn: string
   deviceUserId: string // enrollNumber
   recordTime: string // timestamp
+}
+
+export interface ZkDeviceUser {
+  uid: number
+  role: number
+  name: string
+  userId: string
+  cardno: number
 }
 
 export class ZKDevice {
@@ -66,6 +77,83 @@ export class ZKDevice {
     } catch (error) {
       logger.error('Error clearing attendance logs:', error)
       return false
+    }
+  }
+
+  async getUsers(): Promise<ZkDeviceUser[]> {
+    if (!this.isConnected) {
+      const connected = await this.connect()
+      if (!connected) return []
+    }
+
+    try {
+      const result = await this.zkInstance.getUsers()
+      return (result?.data || []).map((user: ZkDeviceUser) => ({
+        uid: user.uid,
+        role: user.role,
+        name: user.name,
+        userId: String(user.userId || '').trim(),
+        cardno: user.cardno ?? 0,
+      }))
+    } catch (error) {
+      logger.error('Error fetching device users:', error)
+      return []
+    }
+  }
+
+  async upsertUser(params: { userId: string; name: string; uid?: number }) {
+    if (!this.isConnected) {
+      const connected = await this.connect()
+      if (!connected) throw new Error('Device is offline')
+    }
+
+    const existing = await this.getUsers()
+    const userId = params.userId.slice(0, 9)
+    const found = existing.find(
+      (user) => user.userId === userId || user.userId === String(Number(userId))
+    )
+
+    if (found) {
+      return { created: false, user: found }
+    }
+
+    const maxUid = existing.reduce((max, user) => Math.max(max, user.uid), 0)
+    const uid = params.uid ?? maxUid + 1
+    const record = encodeUserData72({
+      uid,
+      role: 0,
+      password: '',
+      name: params.name.slice(0, 24),
+      userId,
+    })
+
+    await this.zkInstance.executeCmd(COMMANDS.CMD_USER_WRQ, record)
+    logger.info(`Created device user ${userId} (uid ${uid})`)
+    return {
+      created: true,
+      user: { uid, role: 0, name: params.name, userId, cardno: 0 },
+    }
+  }
+
+  /** Puts device in fingerprint enrollment mode for the given user PIN. */
+  async startFingerprintEnrollment(userId: string, fingerIndex = 0) {
+    if (!this.isConnected) {
+      const connected = await this.connect()
+      if (!connected) throw new Error('Device is offline')
+    }
+
+    const pin = userId.slice(0, 9)
+    const buffer = Buffer.alloc(4)
+    buffer.writeUInt32LE(parseInt(pin, 10) || 0, 0)
+
+    try {
+      await this.zkInstance.executeCmd(COMMANDS.CMD_STARTENROLL, buffer)
+      logger.info(`Started fingerprint enrollment for user ${pin} (finger ${fingerIndex})`)
+      return { success: true, mode: 'start_enroll' as const }
+    } catch (error) {
+      logger.warn('CMD_STARTENROLL failed, trying capture finger command', error)
+      await this.zkInstance.executeCmd(COMMANDS.CMD_CAPTUREFINGER, buffer)
+      return { success: true, mode: 'capture_finger' as const }
     }
   }
 }

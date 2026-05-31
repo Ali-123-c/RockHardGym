@@ -58,13 +58,21 @@ export async function POST(req: Request) {
         
         // Also insert into main attendance table if checkin and member exists
         if (memberId && eventType === 'checkin') {
-           const scanDate = new Date(log.timestamp).toISOString().split('T')[0]
-           // We might want to check for duplicates in the main attendance table as well
-           await supabase.from('attendance').insert({
-             member_id: memberId,
-             scan_time: log.timestamp,
-             date: scanDate
-           })
+          const scanDate = new Date(log.timestamp).toISOString().split('T')[0]
+          const { data: existing } = await supabase
+            .from('attendance')
+            .select('id')
+            .eq('member_id', memberId)
+            .eq('date', scanDate)
+            .maybeSingle()
+
+          if (!existing) {
+            await supabase.from('attendance').insert({
+              member_id: memberId,
+              scan_time: log.timestamp,
+              date: scanDate,
+            })
+          }
         }
       }
     }

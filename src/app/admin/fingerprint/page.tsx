@@ -246,7 +246,7 @@ export default function DeviceSettingsPage() {
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-950">Device Settings</h1>
             <p className="mt-2 max-w-2xl text-slate-500">
-              Configure the fingerprint device, test LAN connectivity, and monitor recent health checks.
+              Single-PC mode: run GymFlow and the fingerprint bridge on this computer. Test connection here, then copy the Device ID into <code className="rounded bg-slate-100 px-1 font-mono text-xs">fingerprint-bridge/.env</code>.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -294,6 +294,16 @@ export default function DeviceSettingsPage() {
             >
               {notice.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
               {notice.text}
+            </div>
+          )}
+
+          {device.id && (
+            <div className="mb-5 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+              <p className="font-semibold">Bridge config (fingerprint-bridge/.env)</p>
+              <p className="mt-1 font-mono text-xs break-all">DEVICE_ID={device.id}</p>
+              <p className="mt-2 text-indigo-700">
+                Also set DEVICE_IP={device.ip_address}, API_BASE_URL=http://localhost:3000, MODE=real, and match API_KEY with FINGERPRINT_API_KEY in .env.local.
+              </p>
             </div>
           )}
 

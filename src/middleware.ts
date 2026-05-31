@@ -1,8 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { isFingerprintBridgeApiPath, isValidFingerprintApiKey } from '@/lib/fingerprint-api-key'
 
-// In-memory rate limiter state
-const rateLimitMap = new Map<string, { count: number, resetTime: number }>()
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
 const LIMIT = 60
 const WINDOW_MS = 60 * 1000
 
@@ -11,7 +11,12 @@ export async function middleware(request: NextRequest) {
     request,
   })
 
-  // 1. Supabase Auth Check
+  const pathname = request.nextUrl.pathname
+  const isApiRoute = pathname.startsWith('/api')
+  const isLoginPage = pathname === '/login'
+  const isBridgeApi =
+    isFingerprintBridgeApiPath(pathname) && isValidFingerprintApiKey(request)
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -33,32 +38,28 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  const isApiRoute = request.nextUrl.pathname.startsWith('/api')
-  const isLoginPage = request.nextUrl.pathname === '/login'
-
-  // If user is not logged in and tries to access anything other than /login, block them
-  if (!user && !isLoginPage) {
+  if (!user && !isLoginPage && !isBridgeApi) {
     if (isApiRoute) {
-      return new NextResponse(
-        JSON.stringify({ success: false, error: 'Unauthorized' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      )
+      return new NextResponse(JSON.stringify({ success: false, error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // If user is logged in and tries to access login page, redirect to home
   if (user && isLoginPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
   }
 
-  // 2. Rate Limiting for API routes
   if (isApiRoute) {
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown-ip'
     const now = Date.now()
@@ -71,17 +72,17 @@ export async function middleware(request: NextRequest) {
         record.count++
         if (record.count > LIMIT) {
           return new NextResponse(
-            JSON.stringify({ 
-              success: false, 
+            JSON.stringify({
+              success: false,
               error: 'Too Many Requests',
-              message: 'Rate limit exceeded. Please try again later.'
+              message: 'Rate limit exceeded. Please try again later.',
             }),
-            { 
-              status: 429, 
-              headers: { 
+            {
+              status: 429,
+              headers: {
                 'Content-Type': 'application/json',
-                'Retry-After': Math.ceil((record.resetTime - now) / 1000).toString()
-              } 
+                'Retry-After': Math.ceil((record.resetTime - now) / 1000).toString(),
+              },
             }
           )
         }
@@ -91,7 +92,6 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // 3. Security Headers
   supabaseResponse.headers.set('X-Frame-Options', 'DENY')
   supabaseResponse.headers.set('X-Content-Type-Options', 'nosniff')
   supabaseResponse.headers.set('Referrer-Policy', 'origin-when-cross-origin')

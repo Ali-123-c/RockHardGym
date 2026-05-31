@@ -1,5 +1,11 @@
+.env
 .env.local
+.env.*.local
+fingerprint-bridge/.env
+fingerprint-bridge/local-sync.json
+fingerprint-bridge/logs/
 node_modules/
+fingerprint-bridge/node_modules/
 .next/
 dist/
 build/

@@ -143,4 +143,7 @@ See [fingerprint/README.md](fingerprint/README.md) for Python setup instructions
 For Supabase docs: https://supabase.com/docs
 For Next.js docs: https://nextjs.org/docs
 For Tailwind CSS: https://tailwindcss.com/docs
- DATABASE PASSWORD :ROCKHARDGYM123@
+
+## Fingerprint (single PC)
+
+See [SINGLE_PC_SETUP.md](SINGLE_PC_SETUP.md) for one-computer reception desk setup with the ZKTeco bridge.

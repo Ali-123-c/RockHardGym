@@ -4,7 +4,10 @@
   "description": "Simple Gym Management System with Fingerprint Attendance",
   "scripts": {
     "dev": "next dev",
+    "dev:bridge": "npm --prefix fingerprint-bridge run dev",
+    "start:bridge": "npm --prefix fingerprint-bridge start",
     "build": "next build",
+    "build:bridge": "npm --prefix fingerprint-bridge run build",
     "start": "next start",
     "lint": "next lint"
   },

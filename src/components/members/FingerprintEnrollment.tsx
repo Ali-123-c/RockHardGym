@@ -90,8 +90,8 @@ export function FingerprintEnrollment({ memberId, membershipNo, memberName }: Pr
           </span>
         ) : onDevice ? (
           <span>
-            Registered on device as <strong>{deviceUser?.name || memberName}</strong> (ID{' '}
-            <span className="font-mono">{deviceUser?.userId || membershipNo}</span>)
+            On device as ID <span className="font-mono">{deviceUser?.userId || membershipNo}</span>.
+            If scans do not mark attendance, ensure member <strong>membership number</strong> equals that ID exactly.
           </span>
         ) : (
           <span>Not on device yet — register below, then scan fingerprint on the ZKTeco.</span>

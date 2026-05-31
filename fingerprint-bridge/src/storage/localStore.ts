@@ -104,14 +104,81 @@ export function markLogsSyncedByKey(enrollNumber: string, timestamp: string) {
   let marked = 0
 
   for (const log of currentLogs) {
-    if (log.enrollNumber === enrollNumber && log.timestamp === timestamp && log.synced === 0) {
+    if (
+      log.enrollNumber.toLowerCase() === enrollNumber.toLowerCase() &&
+      log.timestamp === timestamp &&
+      log.synced === 0
+    ) {
       log.synced = 1
+      log.last_error = undefined
       log.updated_at = new Date().toISOString()
       marked++
     }
   }
 
   if (marked > 0) writeLogs(currentLogs)
+}
+
+/** Re-queue logs that synced but never matched a member. */
+export function requeueLogsByEnrollNumbers(enrollNumbers: string[]) {
+  const targets = new Set(enrollNumbers.map((e) => e.trim().toLowerCase()))
+  if (targets.size === 0) return
+
+  const currentLogs = readLogs()
+  let requeued = 0
+
+  for (const log of currentLogs) {
+    const key = log.enrollNumber.trim().toLowerCase()
+    if (targets.has(key)) {
+      log.synced = 0
+      log.last_error = 'No matching membership_no in GymFlow'
+      log.updated_at = new Date().toISOString()
+      requeued++
+    }
+  }
+
+  if (requeued > 0) {
+    writeLogs(currentLogs)
+    logger.warn(`Re-queued ${requeued} log(s) — fix membership_no to match device user ID.`)
+  }
+}
+
+/** On startup: retry logs that failed with timeout/errors. */
+export function requeueFailedSyncLogs() {
+  const currentLogs = readLogs()
+  let requeued = 0
+
+  for (const log of currentLogs) {
+    if (log.synced === 1 && log.last_error) {
+      log.synced = 0
+      requeued++
+    }
+  }
+
+  if (requeued > 0) {
+    writeLogs(currentLogs)
+    logger.info(`Re-queued ${requeued} previously failed log(s) for sync retry.`)
+  }
+}
+
+/** Re-queue recent logs so attendance can be retried after membership_no fixes. */
+export function requeueRecentLogs(maxAgeHours = 48) {
+  const cutoff = Date.now() - maxAgeHours * 60 * 60 * 1000
+  const currentLogs = readLogs()
+  let requeued = 0
+
+  for (const log of currentLogs) {
+    const ts = new Date(log.timestamp).getTime()
+    if (!Number.isNaN(ts) && ts >= cutoff) {
+      log.synced = 0
+      requeued++
+    }
+  }
+
+  if (requeued > 0) {
+    writeLogs(currentLogs)
+    logger.info(`Re-queued ${requeued} recent log(s) for attendance retry.`)
+  }
 }
 
 export function markLogsAsFailed(ids: number[], errorMessage: string) {

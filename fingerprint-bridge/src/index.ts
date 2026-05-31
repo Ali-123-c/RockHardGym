@@ -1,5 +1,5 @@
 import { logger } from './utils/logger'
-import { initDB } from './storage/localStore'
+import { initDB, requeueFailedSyncLogs, requeueRecentLogs } from './storage/localStore'
 import { startScheduler } from './services/scheduler'
 import { config } from './config'
 import { startApiServer } from './services/apiServer'
@@ -21,6 +21,8 @@ async function bootstrap() {
 
   // Initialize local JSON cache for failed/unsynced attendance records
   initDB()
+  requeueFailedSyncLogs()
+  requeueRecentLogs(48)
 
   // Start REST API for PC 2 health checks and manual sync
   const server = startApiServer()

@@ -66,19 +66,23 @@ export async function POST(req: Request) {
     const unmatched = new Set<string>()
 
     for (const log of logs) {
-      const enrollKey = normalizeEnrollKey(log.enrollNumber)
-      if (!enrollKey) {
+      const enrollRaw = String(log.enrollNumber ?? '')
+        .replace(/\0/g, '')
+        .trim()
+      if (!enrollRaw) {
         errors.push('Skipped log with empty enrollNumber')
         continue
       }
 
-      const memberInfo = resolveMemberForEnroll(memberMap, log.enrollNumber)
+      const memberInfo = resolveMemberForEnroll(memberMap, enrollRaw)
       const memberId = memberInfo?.id || null
+      const enrollKey = normalizeEnrollKey(enrollRaw) || enrollRaw
       const memberName = memberInfo?.name || `Unknown (${enrollKey})`
       const eventType = log.event_type || 'checkin'
 
       if (!memberInfo) {
         unmatched.add(enrollKey)
+        console.warn(`No member for device ID "${enrollRaw}" — set membership_no to match`)
       }
 
       const { error: insertError } = await supabase.from('attendance_logs').insert({

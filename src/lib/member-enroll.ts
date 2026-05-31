@@ -6,8 +6,17 @@ export interface MemberRow {
   name: string
 }
 
+function addKey(set: Set<string>, value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return
+  set.add(trimmed)
+  set.add(trimmed.toLowerCase())
+}
+
 export function normalizeEnrollKey(value: string | number | null | undefined): string {
-  const raw = String(value ?? '').trim()
+  const raw = String(value ?? '')
+    .replace(/\0/g, '')
+    .trim()
   if (!raw) return ''
   if (/^\d+$/.test(raw)) {
     return String(parseInt(raw, 10))
@@ -16,15 +25,19 @@ export function normalizeEnrollKey(value: string | number | null | undefined): s
 }
 
 export function enrollLookupKeys(value: string | number | null | undefined): string[] {
-  const raw = String(value ?? '').trim()
+  const raw = String(value ?? '')
+    .replace(/\0/g, '')
+    .trim()
   if (!raw) return []
 
-  const keys = new Set<string>([raw])
+  const keys = new Set<string>()
+  addKey(keys, raw)
+
   const normalized = normalizeEnrollKey(raw)
-  if (normalized) keys.add(normalized)
+  if (normalized) addKey(keys, normalized)
 
   if (/^\d+$/.test(raw)) {
-    keys.add(raw.padStart(raw.length < 4 ? 4 : raw.length, '0'))
+    addKey(keys, raw.padStart(Math.max(raw.length, 4), '0'))
   }
 
   return [...keys]
@@ -36,6 +49,7 @@ export function buildMemberLookupMap(members: MemberRow[]): Map<string, MemberRo
   for (const member of members) {
     for (const key of enrollLookupKeys(member.membership_no)) {
       map.set(key, member)
+      map.set(key.toLowerCase(), member)
     }
   }
 
@@ -47,7 +61,7 @@ export function resolveMemberForEnroll(
   enrollNumber: string | number | null | undefined
 ): MemberRow | undefined {
   for (const key of enrollLookupKeys(enrollNumber)) {
-    const member = map.get(key)
+    const member = map.get(key) ?? map.get(key.toLowerCase())
     if (member) return member
   }
   return undefined
@@ -63,4 +77,13 @@ export function localDateFromTimestamp(
   }
 
   return date.toLocaleDateString('en-CA', { timeZone })
+}
+
+export function isUnmatchedEnroll(
+  unmatched: string[] | undefined,
+  enrollNumber: string
+): boolean {
+  if (!unmatched?.length) return false
+  const keys = new Set(enrollLookupKeys(enrollNumber).map((k) => k.toLowerCase()))
+  return unmatched.some((u) => keys.has(normalizeEnrollKey(u).toLowerCase()))
 }

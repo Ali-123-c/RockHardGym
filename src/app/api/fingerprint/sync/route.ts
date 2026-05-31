@@ -51,6 +51,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Invalid payload' }, { status: 400 })
     }
 
+    const { data: deviceRow, error: deviceError } = await supabase
+      .from('fingerprint_devices')
+      .select('id')
+      .eq('id', device_id)
+      .maybeSingle()
+
+    if (deviceError) throw deviceError
+    if (!deviceRow) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Invalid device_id "${device_id}". Copy the correct UUID from Admin → Devices into fingerprint-bridge/.env DEVICE_ID.`,
+        },
+        { status: 400 }
+      )
+    }
+
     const { data: allMembers, error: memberError } = await supabase
       .from('members')
       .select('id, membership_no, name, status')

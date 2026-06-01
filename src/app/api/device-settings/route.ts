@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { validateFingerprintApiKey } from '@/lib/fingerprint-auth'
 
 const DEFAULT_DEVICE = {
   device_name: 'ZKTeco K70',
@@ -15,7 +16,11 @@ function toInteger(value: unknown, fallback: number) {
   return Number.isInteger(parsed) ? parsed : fallback
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Validate API key for sensitive device configuration
+  const authError = validateFingerprintApiKey(request)
+  if (authError) return authError
+
   try {
     const { data, error } = await supabase
       .from('fingerprint_devices')
@@ -55,6 +60,10 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  // Validate API key for sensitive device configuration
+  const authError = validateFingerprintApiKey(request)
+  if (authError) return authError
+
   try {
     const body = await request.json()
     const deviceName = String(body.device_name || '').trim()

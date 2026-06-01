@@ -73,13 +73,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET /api/fingerprint/config - Get app configuration for Python client
+// GET /api/fingerprint - Status only (no sensitive config exposed)
 export async function GET(_request: NextRequest) {
   return NextResponse.json({
     success: true,
-    config: {
-      api_url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-      attendance_endpoint: '/api/fingerprint/scan',
-    },
-  })
+    status: 'Bridge endpoint active',
+    message: 'Use /api/fingerprint/scan for attendance marking',
+  }, { status: 200 })
 }

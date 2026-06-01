@@ -10,7 +10,7 @@ interface Props {
   memberName: string
 }
 
-export function FingerprintEnrollment({ memberId, membershipNo, memberName }: Props) {
+export function FingerprintEnrollment({ memberId, membershipNo }: Props) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [onDevice, setOnDevice] = useState(false)

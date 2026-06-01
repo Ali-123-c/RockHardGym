@@ -37,7 +37,7 @@ export async function POST(req: Request) {
 }
 
 // The Admin Dashboard can call this to get overall system status
-export async function GET(req: Request) {
+export async function GET() {
   try {
     const { data: devices, error } = await supabase
       .from('fingerprint_devices')

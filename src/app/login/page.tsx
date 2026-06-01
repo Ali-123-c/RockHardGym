@@ -1,19 +1,26 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import { Lock, Mail, Key, Loader2, ArrowRight } from 'lucide-react'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
-  const supabase = createClient()
+  const searchParams = useSearchParams()
+  const supabase = useMemo(() => createClient(), [])
   
-  const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (searchParams?.get('error') !== 'admin_required') return
+
+    setError('Admin access required. Please sign in with the configured super admin account.')
+    supabase.auth.signOut()
+  }, [searchParams, supabase])
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -21,23 +28,13 @@ export default function LoginPage() {
     setError('')
 
     try {
-      if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
-        if (error) throw error
-        router.push('/')
-        router.refresh()
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-        })
-        if (error) throw error
-        alert('Check your email for the confirmation link or login directly if email confirmation is disabled.')
-        setIsLogin(true)
-      }
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (error) throw error
+      router.push('/')
+      router.refresh()
     } catch (err: any) {
       setError(err.message || 'An error occurred during authentication.')
     } finally {
@@ -67,7 +64,7 @@ export default function LoginPage() {
               ROCK HARD GYM Admin
             </h1>
             <p className="text-slate-600 text-sm text-center mb-8">
-              {isLogin ? 'Securely login to manage your gym.' : 'Create the first admin account.'}
+              Sign in with the configured super admin account.
             </p>
 
             {error && (
@@ -116,25 +113,23 @@ export default function LoginPage() {
                 <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity bg-white" />
                 {loading ? <Loader2 className="relative w-5 h-5 animate-spin" /> : (
                   <>
-                    <span className="relative">{isLogin ? 'Secure Login' : 'Create Account'}</span>
+                    <span className="relative">Secure Login</span>
                     <ArrowRight className="relative w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
               </button>
             </form>
-
-            <div className="mt-6 text-center">
-              <button 
-                onClick={() => { setIsLogin(!isLogin); setError(''); }}
-                className="text-xs text-slate-600 hover:text-indigo-600 transition"
-                type="button"
-              >
-                {isLogin ? "Don't have an account? Sign up" : "Already have an account? Login"}
-              </button>
-            </div>
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   )
 }

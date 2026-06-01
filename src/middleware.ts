@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { isAdminUser } from '@/lib/admin-auth'
 import { isFingerprintBridgeApiPath, isValidFingerprintApiKey } from '@/lib/fingerprint-api-key'
 
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
@@ -54,7 +55,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (user && isLoginPage) {
+  if (user && !isLoginPage && !isBridgeApi && !isAdminUser(user)) {
+    if (isApiRoute) {
+      return new NextResponse(JSON.stringify({ success: false, error: 'Forbidden: Admin access required' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    url.searchParams.set('error', 'admin_required')
+    return NextResponse.redirect(url)
+  }
+
+  if (user && isLoginPage && isAdminUser(user)) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)

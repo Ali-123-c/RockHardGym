@@ -4,7 +4,8 @@
     "skipLibCheck": true,
     "module": "Node16",
     "moduleResolution": "node16",
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "ignoreDeprecations": "6.0"
   },
   "include": ["vite.config.ts"]
 }

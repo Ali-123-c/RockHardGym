@@ -12,7 +12,7 @@ export function isFingerprintBridgeApiPath(pathname: string): boolean {
 export function extractFingerprintApiKey(request: Request): string | null {
   const authHeader = request.headers.get('Authorization')
   const bearer = authHeader?.split('Bearer ')[1]?.trim()
-  const headerKey = request.headers.get('x-api-key')?.trim()
+  const headerKey = request.headers.get('x-fingerprint-api-key')?.trim() || request.headers.get('x-api-key')?.trim()
   return bearer || headerKey || null
 }
 

@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
         .select('id')
         .eq('status', 'Active')
         .limit(1)
-      
+
       if (activeMembers && activeMembers.length > 0) {
         targetMemberId = activeMembers[0].id
       }

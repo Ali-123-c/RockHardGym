@@ -47,7 +47,7 @@ Header: "x-fingerprint-api-key: gymflow_local_bridge_key_2026"
 ### 3. Public vs Protected Endpoints
 
 | Endpoint | Public | Requires Auth | Exposes |
-|----------|--------|---------------|----------|
+|----------|--------|---------------|---------|
 | POST /api/fingerprint/scan | ✅ | ❌ | Member name, attendance status |
 | GET /api/fingerprint | ✅ | ❌ | Just status message |
 | GET /api/device-settings | ❌ | ✅ | DEVICE_ID, IP, port |
@@ -238,7 +238,7 @@ curl http://localhost:3000/api/fingerprint
 Don't confuse:
 
 | Field | Scope | Changes | Purpose |
-|-------|-------|---------|----------|
+|-------|-------|---------|---------|
 | **Device ID** | Hardware identifier | Never* | Identifies which scanner |
 | **Member ID** | Member unique ID | Never | Who is the person |
 | **Fingerprint Template** | Member's finger data | Per enrollment | Biometric match |

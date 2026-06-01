@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     // client_timezone: e.g. "Asia/Karachi", local_date: e.g. "2026-05-24"
-    const { member_id, scan_time, client_timezone, local_date } = body
+    const { member_id, scan_time, client_timezone, local_date, idempotency_key } = body
 
     if (!member_id) {
       return NextResponse.json(
@@ -15,14 +15,37 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if member exists
-    const { data: member, error: memberError } = await supabase
-      .from('members')
-      .select('id, name, status, membership_no, joining_date, exemption_month')
-      .eq('id', member_id)
-      .single()
+    // Check if member exists with retries for transient failures
+    let member = null
+    let memberError = null
+    let retries = 3
+    
+    while (retries > 0) {
+      try {
+        const result = await supabase
+          .from('members')
+          .select('id, name, status, membership_no, joining_date, exemption_month')
+          .eq('id', member_id)
+          .single()
+        
+        member = result.data
+        memberError = result.error
+        
+        if (!memberError) break
+        retries--
+        if (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      } catch (e) {
+        retries--
+        if (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      }
+    }
 
     if (memberError || !member) {
+      console.error(`Member ${member_id} not found after retries`)
       return NextResponse.json(
         { success: false, error: 'Member not found' },
         { status: 404 }
@@ -88,6 +111,7 @@ export async function POST(request: NextRequest) {
         // Automatically mark as Inactive and notify admin
         await supabase.from('members').update({ status: 'Inactive' }).eq('id', member_id)
         
+        console.warn(`Member ${member_id} marked inactive due to 10-day absence`)
         return NextResponse.json(
           { success: false, error: 'requires_admin_review', message: 'Member has been absent for 10 days. Status set to Inactive. Admin review required.' },
           { status: 403 }
@@ -110,32 +134,66 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (existingAttendance) {
+      // Return success if using idempotency_key (idempotent operation)
+      if (idempotency_key) {
+        return NextResponse.json(
+          { success: true, message: 'Attendance already marked for today (idempotent)', data: existingAttendance, member, idempotent: true },
+          { status: 200 }
+        )
+      }
       return NextResponse.json(
         { success: false, error: 'Attendance already marked for today' },
         { status: 400 }
       )
     }
 
-    // Insert attendance record
-    const { data, error } = await supabase
-      .from('attendance')
-      .insert([
-        {
-          member_id,
-          scan_time: scanTimeISO,
-          date: attendanceDate,
+    // Insert attendance record with retry logic
+    let insertError = null
+    let insertedData = null
+    retries = 2
+    
+    while (retries > 0) {
+      try {
+        const result = await supabase
+          .from('attendance')
+          .insert([
+            {
+              member_id,
+              scan_time: scanTimeISO,
+              date: attendanceDate,
+            }
+          ])
+          .select()
+          .single()
+        
+        insertedData = result.data
+        insertError = result.error
+        
+        if (!insertError) break
+        retries--
+        if (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 500))
         }
-      ])
-      .select()
-      .single()
+      } catch (e: any) {
+        insertError = e
+        retries--
+        if (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      }
+    }
 
-    if (error) throw error
+    if (insertError) {
+      console.error(`Failed to insert attendance for member ${member_id}:`, insertError)
+      throw insertError
+    }
 
     return NextResponse.json(
-      { success: true, message: 'Attendance marked successfully', data, member },
+      { success: true, message: 'Attendance marked successfully', data: insertedData, member },
       { status: 201 }
     )
   } catch (error: any) {
+    console.error('POST /attendance error:', error)
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to mark attendance' },
       { status: 500 }

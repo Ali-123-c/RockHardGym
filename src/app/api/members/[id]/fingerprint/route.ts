@@ -24,24 +24,43 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Member not found' }, { status: 404 })
     }
 
-    const deviceCheck = await checkDeviceUser(member.membership_no)
-
-    return NextResponse.json({
-      success: true,
-      member,
-      device: deviceCheck,
-      instructions: {
-        deviceUserId: member.membership_no,
-        note: 'Device User ID must match membership number exactly.',
-      },
-    })
+    try {
+      const deviceCheck = await checkDeviceUser(member.membership_no)
+      return NextResponse.json({
+        success: true,
+        member,
+        device: deviceCheck,
+        instructions: {
+          deviceUserId: member.membership_no,
+          note: 'Device User ID must match membership number exactly.',
+        },
+      })
+    } catch (bridgeError: any) {
+      console.error('Bridge check failed:', bridgeError.message)
+      // Return member info even if bridge is down, device status as unknown
+      return NextResponse.json({
+        success: true,
+        member,
+        device: {
+          success: false,
+          onDevice: null,
+          bridgeStatus: 'offline',
+          message: 'Fingerprint bridge temporarily unavailable',
+        },
+        instructions: {
+          deviceUserId: member.membership_no,
+          note: 'Device User ID must match membership number exactly.',
+        },
+      }, { status: 200 })
+    }
   } catch (error: any) {
+    console.error('GET /fingerprint error:', error)
     return NextResponse.json(
       {
         success: false,
-        error: error.message || 'Could not reach fingerprint bridge. Is npm run dev:bridge running?',
+        error: error.message || 'Failed to retrieve fingerprint status',
       },
-      { status: 503 }
+      { status: 500 }
     )
   }
 }
@@ -64,47 +83,84 @@ export async function POST(
     const name = member.name
 
     if (action === 'check') {
-      const deviceCheck = await checkDeviceUser(userId)
-      return NextResponse.json({ success: true, device: deviceCheck })
+      try {
+        const deviceCheck = await checkDeviceUser(userId)
+        return NextResponse.json({ success: true, device: deviceCheck })
+      } catch (error: any) {
+        console.warn(`Device check failed for ${userId}:`, error.message)
+        return NextResponse.json({
+          success: false,
+          error: 'Device check failed - bridge may be offline',
+          bridgeStatus: 'offline',
+        }, { status: 503 })
+      }
     }
 
     if (action === 'register') {
-      const result = await registerDeviceUser(userId, name)
-      return NextResponse.json({
-        success: true,
-        message: result.created
-          ? `User ${userId} created on device. Now enroll fingerprint.`
-          : `User ${userId} already exists on device.`,
-        result,
-      })
+      try {
+        const result = await registerDeviceUser(userId, name)
+        return NextResponse.json({
+          success: true,
+          message: result.created
+            ? `User ${userId} created on device. Now enroll fingerprint.`
+            : `User ${userId} already exists on device.`,
+          result,
+        })
+      } catch (error: any) {
+        console.error(`Device registration failed for ${userId}:`, error.message)
+        return NextResponse.json({
+          success: false,
+          error: 'Failed to register user on device - please try again',
+          action: 'retry',
+        }, { status: 503 })
+      }
     }
 
     if (action === 'start-enroll') {
-      const result = await startDeviceEnrollment(userId, name, Number(body.fingerIndex ?? 0))
-      return NextResponse.json({
-        success: true,
-        message: result.message,
-        nextStep: 'Scan the same finger on the device 3 times when prompted.',
-      })
+      try {
+        const result = await startDeviceEnrollment(userId, name, Number(body.fingerIndex ?? 0))
+        return NextResponse.json({
+          success: true,
+          message: result.message,
+          nextStep: 'Scan the same finger on the device 3 times when prompted.',
+        })
+      } catch (error: any) {
+        console.error(`Fingerprint enrollment failed for ${userId}:`, error.message)
+        return NextResponse.json({
+          success: false,
+          error: 'Fingerprint enrollment failed - please ensure the device is connected and try again',
+          action: 'retry',
+        }, { status: 503 })
+      }
     }
 
     if (action === 'sync-now') {
-      const result = await triggerBridgeSync()
-      return NextResponse.json({
-        success: true,
-        message: 'Attendance sync triggered',
-        result,
-      })
+      try {
+        const result = await triggerBridgeSync()
+        return NextResponse.json({
+          success: true,
+          message: 'Attendance sync triggered',
+          result,
+        })
+      } catch (error: any) {
+        console.error('Attendance sync failed:', error.message)
+        return NextResponse.json({
+          success: false,
+          error: 'Failed to sync attendance - bridge may be offline',
+          action: 'retry',
+        }, { status: 503 })
+      }
     }
 
     return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 })
   } catch (error: any) {
+    console.error('POST /fingerprint error:', error)
     return NextResponse.json(
       {
         success: false,
-        error: error.message || 'Fingerprint enrollment failed',
+        error: error.message || 'Fingerprint operation failed',
       },
-      { status: 503 }
+      { status: 500 }
     )
   }
 }

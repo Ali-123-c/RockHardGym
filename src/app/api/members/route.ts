@@ -14,22 +14,96 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { data, error } = await supabase.from('members').insert([body]).select().single()
+    // Check if phone or membership already exists
+    const { data: existingByPhone } = await supabase
+      .from('members')
+      .select('id, phone')
+      .eq('phone', body.phone)
+      .single()
     
-    if (error) {
-      console.error('Supabase Insert Error:', error);
+    const { data: existingByMembership } = await supabase
+      .from('members')
+      .select('id, membership_no')
+      .eq('membership_no', body.membership_no)
+      .single()
+
+    if (existingByPhone) {
       return NextResponse.json(
-        { success: false, error: error.message || error.details || 'Failed to create member in database' },
+        { success: false, error: 'Phone number already registered' },
+        { status: 409 }
+      )
+    }
+
+    if (existingByMembership) {
+      return NextResponse.json(
+        { success: false, error: 'Membership number already exists' },
+        { status: 409 }
+      )
+    }
+
+    // Attempt to insert with retries for transient failures
+    let retries = 2
+    let insertError = null
+    let insertedData = null
+
+    while (retries > 0) {
+      try {
+        const result = await supabase
+          .from('members')
+          .insert([body])
+          .select()
+          .single()
+        
+        insertedData = result.data
+        insertError = result.error
+        
+        if (!insertError) break
+        
+        // If it's a unique constraint, don't retry
+        if (insertError.message?.includes('unique') || insertError.message?.includes('duplicate')) {
+          throw new Error('Duplicate entry - member already exists')
+        }
+        
+        retries--
+        if (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      } catch (e: any) {
+        insertError = e
+        // If it's a unique constraint, don't retry
+        if (e.message?.includes('unique') || e.message?.includes('duplicate')) {
+          throw e
+        }
+        retries--
+        if (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      }
+    }
+    
+    if (insertError) {
+      console.error('Supabase Insert Error:', insertError)
+      return NextResponse.json(
+        { success: false, error: insertError.message || 'Failed to create member in database' },
         { status: 400 }
       )
     }
 
     return NextResponse.json(
-      { success: true, message: 'Member created successfully', data },
+      { success: true, message: 'Member created successfully', data: insertedData },
       { status: 201 }
     )
   } catch (error: any) {
-    console.error('API Route Error:', error);
+    console.error('API Route Error:', error)
+    
+    // Handle specific error messages
+    if (error.message?.includes('unique') || error.message?.includes('duplicate')) {
+      return NextResponse.json(
+        { success: false, error: error.message || 'Member already exists' },
+        { status: 409 }
+      )
+    }
+    
     return NextResponse.json(
       { success: false, error: error.message || 'Server error occurred while creating member' },
       { status: 500 }
@@ -51,7 +125,10 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await query.order('created_at', { ascending: false })
 
-    if (error) throw error
+    if (error) {
+      console.error('Fetch members error:', error)
+      throw error
+    }
 
     return NextResponse.json({
       success: true,
@@ -59,6 +136,7 @@ export async function GET(request: NextRequest) {
       count: data?.length || 0,
     })
   } catch (error: any) {
+    console.error('GET /members error:', error)
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to fetch members' },
       { status: 500 }

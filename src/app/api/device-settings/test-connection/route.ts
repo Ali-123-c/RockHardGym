@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { testDeviceConnection } from '@/lib/device-connection'
 import { supabase } from '@/lib/supabase'
-import { validateFingerprintApiKey } from '@/lib/fingerprint-auth'
 
 export const runtime = 'nodejs'
 
@@ -11,10 +10,6 @@ function toInteger(value: unknown, fallback: number) {
 }
 
 export async function POST(request: NextRequest) {
-  // Validate API key for sensitive device operations
-  const authError = validateFingerprintApiKey(request)
-  if (authError) return authError
-
   try {
     const body = await request.json()
     const deviceId = body.id ? String(body.id) : null

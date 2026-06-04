@@ -5,12 +5,30 @@ import { logger } from '../utils/logger'
 import { connectionManager } from './connectionManager'
 import { runSyncJob } from './syncService'
 
+// ── Shared secret for authenticating GymFlow → bridge requests ───────────
+// Uses config.service.authKey which is populated from BRIDGE_API_KEY env var.
+// The bridge will NOT start if BRIDGE_API_KEY is missing (see index.ts).
+const BRIDGE_AUTH_HEADER = 'x-bridge-api-key'
+
+function isAuthorized(request: IncomingMessage): boolean {
+  const expectedKey = config.service.authKey
+  if (!expectedKey) {
+    logger.warn('BRIDGE_API_KEY is not set — all requests will be DENIED')
+    return false
+  }
+  const provided = request.headers[BRIDGE_AUTH_HEADER]?.toString().trim() ||
+    request.headers['authorization']?.toString().replace('Bearer ', '').trim() ||
+    ''
+  return provided === expectedKey
+}
+
 function sendJson(response: ServerResponse, statusCode: number, payload: unknown) {
   response.writeHead(statusCode, {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
+    // Restrict CORS to localhost only — the bridge only talks to the local GymFlow app
+    'Access-Control-Allow-Origin': 'http://localhost:3000',
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type'
+    'Access-Control-Allow-Headers': 'Content-Type, x-bridge-api-key, authorization',
   })
   response.end(JSON.stringify(payload, null, 2))
 }
@@ -31,130 +49,153 @@ function readBody(request: IncomingMessage) {
   })
 }
 
-export function startApiServer() {
-  const server = http.createServer(async (request, response) => {
-    const method = request.method || 'GET'
-    const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`)
+/** Shared request handler — wraps all routes with auth check. */
+async function handleRequest(request: IncomingMessage, response: ServerResponse) {
+  const method = request.method || 'GET'
+  const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`)
 
-    if (method === 'OPTIONS') {
-      sendJson(response, 204, {})
+  // CORS preflight
+  if (method === 'OPTIONS') {
+    sendJson(response, 204, {})
+    return
+  }
+
+  // Public: health check (read-only status only, no sensitive data)
+  if (method === 'GET' && url.pathname === '/health') {
+    sendJson(response, 200, {
+      success: true,
+      service: 'fingerprint-bridge',
+      uptime_seconds: Math.round(process.uptime()),
+      timestamp: new Date().toISOString(),
+      mode: config.mode,
+      connection: {
+        state: connectionManager.getStatus().state,
+        ip: config.device.ip,
+        port: config.device.port,
+        mode: config.mode,
+      },
+      local_sync: {
+        pending: getLocalSyncStats().pending,
+        synced: getLocalSyncStats().synced,
+      },
+    })
+    return
+  }
+
+  // ── All other endpoints require authentication ─────────────────────────
+  if (!isAuthorized(request)) {
+    sendJson(response, 401, { success: false, error: 'Unauthorized: valid x-bridge-api-key header required' })
+    return
+  }
+
+  try {
+    if (method === 'GET' && url.pathname === '/device-status') {
+      sendJson(response, 200, {
+        success: true,
+        device: connectionManager.getStatus(),
+        local_sync: getLocalSyncStats(),
+      })
       return
     }
 
-    try {
-      if (method === 'GET' && url.pathname === '/health') {
-        sendJson(response, 200, {
-          success: true,
-          service: 'fingerprint-bridge',
-          uptime_seconds: Math.round(process.uptime()),
-          timestamp: new Date().toISOString(),
-          connection: connectionManager.getStatus(),
-          local_sync: getLocalSyncStats()
-        })
-        return
-      }
-
-      if (method === 'GET' && url.pathname === '/device-status') {
-        sendJson(response, 200, {
-          success: true,
-          device: connectionManager.getStatus(),
-          local_sync: getLocalSyncStats()
-        })
-        return
-      }
-
-      if (method === 'POST' && url.pathname === '/sync-attendance') {
-        await readBody(request)
-        const result = await runSyncJob()
-        sendJson(response, result.success ? 200 : 500, {
-          success: result.success,
-          result,
-          device: connectionManager.getStatus(),
-          local_sync: getLocalSyncStats()
-        })
-        return
-      }
-
-      if (method === 'GET' && url.pathname === '/device-users') {
-        const users = await connectionManager.getDeviceUsers()
-        sendJson(response, 200, { success: true, count: users.length, users })
-        return
-      }
-
-      if (method === 'GET' && url.pathname === '/device-users/check') {
-        const userId = url.searchParams.get('userId')?.trim()
-        if (!userId) {
-          sendJson(response, 400, { success: false, error: 'userId is required' })
-          return
-        }
-        const users = await connectionManager.getDeviceUsers()
-        const match = users.find(
-          (user) => user.userId === userId || user.userId === String(Number(userId))
-        )
-        sendJson(response, 200, {
-          success: true,
-          userId,
-          onDevice: Boolean(match),
-          user: match ?? null,
-        })
-        return
-      }
-
-      if (method === 'POST' && url.pathname === '/enroll/register') {
-        const body = JSON.parse((await readBody(request)) || '{}')
-        const userId = String(body.userId || '').trim()
-        const name = String(body.name || '').trim()
-        if (!userId || !name) {
-          sendJson(response, 400, { success: false, error: 'userId and name are required' })
-          return
-        }
-        const result = await connectionManager.registerMemberOnDevice({ userId, name })
-        sendJson(response, 200, { success: true, ...result })
-        return
-      }
-
-      if (method === 'POST' && url.pathname === '/enroll/start') {
-        const body = JSON.parse((await readBody(request)) || '{}')
-        const userId = String(body.userId || '').trim()
-        const name = String(body.name || '').trim()
-        const fingerIndex = Number(body.fingerIndex ?? 0)
-        if (!userId) {
-          sendJson(response, 400, { success: false, error: 'userId is required' })
-          return
-        }
-        if (name) {
-          await connectionManager.registerMemberOnDevice({ userId, name })
-        }
-        const enroll = await connectionManager.startMemberEnrollment(userId, fingerIndex)
-        sendJson(response, 200, {
-          success: true,
-          message: 'Device is ready — place the same finger 3 times on the scanner',
-          enroll,
-        })
-        return
-      }
-
-      sendJson(response, 404, {
-        success: false,
-        error: 'Route not found'
+    if (method === 'POST' && url.pathname === '/sync-attendance') {
+      await readBody(request)
+      const result = await runSyncJob()
+      sendJson(response, result.success ? 200 : 500, {
+        success: result.success,
+        result,
+        device: connectionManager.getStatus(),
+        local_sync: getLocalSyncStats(),
       })
-    } catch (error: any) {
-      logger.error('API request failed', error)
-      sendJson(response, 500, {
-        success: false,
-        error: error.message || 'Internal bridge error'
-      })
+      return
     }
-  })
 
-  server.listen(config.service.port, () => {
-    logger.info(`Fingerprint Bridge REST API listening on port ${config.service.port}`)
-    logger.info(`GET  http://localhost:${config.service.port}/health`)
-    logger.info(`GET  http://localhost:${config.service.port}/device-status`)
-    logger.info(`POST http://localhost:${config.service.port}/sync-attendance`)
-    logger.info(`GET  http://localhost:${config.service.port}/device-users`)
-    logger.info(`POST http://localhost:${config.service.port}/enroll/register`)
-    logger.info(`POST http://localhost:${config.service.port}/enroll/start`)
+    if (method === 'GET' && url.pathname === '/device-users') {
+      const users = await connectionManager.getDeviceUsers()
+      sendJson(response, 200, { success: true, count: users.length, users })
+      return
+    }
+
+    if (method === 'GET' && url.pathname === '/device-users/check') {
+      const userId = url.searchParams.get('userId')?.trim()
+      if (!userId) {
+        sendJson(response, 400, { success: false, error: 'userId is required' })
+        return
+      }
+      const users = await connectionManager.getDeviceUsers()
+      const match = users.find(
+        (user) => user.userId === userId || user.userId === String(Number(userId))
+      )
+      sendJson(response, 200, {
+        success: true,
+        userId,
+        onDevice: Boolean(match),
+        user: match ?? null,
+      })
+      return
+    }
+
+    if (method === 'POST' && url.pathname === '/enroll/register') {
+      const body = JSON.parse((await readBody(request)) || '{}')
+      const userId = String(body.userId || '').trim()
+      const name = String(body.name || '').trim()
+      if (!userId || !name) {
+        sendJson(response, 400, { success: false, error: 'userId and name are required' })
+        return
+      }
+      const result = await connectionManager.registerMemberOnDevice({ userId, name })
+      sendJson(response, 200, { success: true, ...result })
+      return
+    }
+
+    if (method === 'POST' && url.pathname === '/enroll/start') {
+      const body = JSON.parse((await readBody(request)) || '{}')
+      const userId = String(body.userId || '').trim()
+      const name = String(body.name || '').trim()
+      const fingerIndex = Number(body.fingerIndex ?? 0)
+      if (!userId) {
+        sendJson(response, 400, { success: false, error: 'userId is required' })
+        return
+      }
+      if (name) {
+        await connectionManager.registerMemberOnDevice({ userId, name })
+      }
+      const enroll = await connectionManager.startMemberEnrollment(userId, fingerIndex)
+      sendJson(response, 200, {
+        success: true,
+        message: 'Device is ready — place the same finger 3 times on the scanner',
+        enroll,
+      })
+      return
+    }
+
+    sendJson(response, 404, {
+      success: false,
+      error: 'Route not found',
+    })
+  } catch (error: any) {
+    logger.error('API request failed', error)
+    sendJson(response, 500, {
+      success: false,
+      error: 'Internal bridge error',
+    })
+  }
+}
+
+export function startApiServer() {
+  const server = http.createServer(handleRequest)
+
+  // Bind to 127.0.0.1 (localhost only) — the bridge only needs to be accessible
+  // from the local GymFlow Next.js app, not from the network.
+  server.listen(config.service.port, '127.0.0.1', () => {
+    logger.info(`Fingerprint Bridge REST API listening on http://127.0.0.1:${config.service.port}`)
+    logger.info('Security: bound to localhost only — not accessible from other devices on the network')
+    logger.info(`GET  http://127.0.0.1:${config.service.port}/health  (public)`)
+    logger.info(`GET  http://127.0.0.1:${config.service.port}/device-status  (requires x-bridge-api-key)`)
+    logger.info(`POST http://127.0.0.1:${config.service.port}/sync-attendance  (requires x-bridge-api-key)`)
+    logger.info(`GET  http://127.0.0.1:${config.service.port}/device-users  (requires x-bridge-api-key)`)
+    logger.info(`POST http://127.0.0.1:${config.service.port}/enroll/register  (requires x-bridge-api-key)`)
+    logger.info(`POST http://127.0.0.1:${config.service.port}/enroll/start  (requires x-bridge-api-key)`)
   })
 
   return server

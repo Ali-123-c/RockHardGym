@@ -38,15 +38,11 @@ export async function POST(request: NextRequest) {
 
     // ── 10-Day Absence Rule ────────────────────────────────────────────────
     // Block attendance if the member has missed 10+ working days (Mon–Sat)
-    // since their last visit (or since joining_date if never visited).
-    // Members exempted for the current month bypass this check.
     if (member.status === 'Active') {
       const now = new Date()
       const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-      // Skip check if member is exempted for this month
       if (member.exemption_month !== currentMonthStr) {
-        // Get the most recent attendance date for this member
         const { data: lastAttendance } = await supabase
           .from('attendance')
           .select('date')
@@ -55,19 +51,18 @@ export async function POST(request: NextRequest) {
           .limit(1)
           .maybeSingle()
 
-        // Start counting from the day after the last attendance OR joining_date
         const startDate = lastAttendance?.date
           ? new Date(lastAttendance.date + 'T00:00:00')
           : new Date(member.joining_date + 'T00:00:00')
-        
-        startDate.setDate(startDate.getDate() + 1) // Day after
+
+        startDate.setDate(startDate.getDate() + 1)
 
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
         let workingDaysAbsent = 0
         const cursor = new Date(startDate)
         while (cursor < today) {
-          if (cursor.getDay() !== 0) { // 0 = Sunday
+          if (cursor.getDay() !== 0) {
             workingDaysAbsent++
           }
           cursor.setDate(cursor.getDate() + 1)

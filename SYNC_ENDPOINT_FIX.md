@@ -85,7 +85,7 @@ curl -X POST http://localhost:3000/api/fingerprint/sync \
 - `src/app/api/fingerprint/sync/route.ts` - Sync endpoint implementation
 - `src/lib/fingerprint-auth.ts` - Auth validation wrapper
 - `fingerprint-bridge/src/services/realtimeSync.ts` - Bridge sending code
-- `.env.local` - Contains `FINGERPRINT_API_KEY=gymflow_local_bridge_key_2026`
+- `.env.local` - Contains `FINGERPRINT_API_KEY` (keep this secret — never commit to git)
 
 ## Lessons Learned
 1. **Header naming**: Must support multiple header variants for compatibility

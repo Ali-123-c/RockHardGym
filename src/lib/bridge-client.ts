@@ -1,4 +1,5 @@
-const BRIDGE_URL = process.env.FINGERPRINT_BRIDGE_URL || 'http://localhost:5050'
+const BRIDGE_URL = process.env.FINGERPRINT_BRIDGE_URL || 'http://127.0.0.1:5050'
+const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY || ''
 const BRIDGE_TIMEOUT = 12000 // 12 second default timeout
 const MAX_RETRIES = 2
 const RETRY_DELAY = 1000 // 1 second between retries
@@ -26,6 +27,7 @@ async function bridgeFetch<T>(path: string, init?: BridgeFetchOptions): Promise<
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
+          'x-bridge-api-key': BRIDGE_API_KEY,
           ...(init?.headers || {}),
         },
         cache: 'no-store',

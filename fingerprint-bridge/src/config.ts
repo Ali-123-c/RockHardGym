@@ -7,7 +7,9 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') })
 export const config = {
   service: {
     port: parseInt(process.env.BRIDGE_PORT || '5050', 10),
-    reconnectIntervalMs: parseInt(process.env.RECONNECT_INTERVAL_MS || '10000', 10)
+    reconnectIntervalMs: parseInt(process.env.RECONNECT_INTERVAL_MS || '10000', 10),
+    // API key for authenticating requests to the bridge itself
+    authKey: process.env.BRIDGE_API_KEY || '',
   },
   api: {
     baseUrl: process.env.API_BASE_URL || 'http://localhost:3000',

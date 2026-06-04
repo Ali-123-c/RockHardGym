@@ -23,6 +23,7 @@ The **web app** runs on Vercel. The **fingerprint bridge** must stay on the gym 
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
 | `NEXT_PUBLIC_APP_URL` | `https://YOUR-APP.vercel.app` |
 | `FINGERPRINT_API_KEY` | Same secret as bridge `API_KEY` |
+| `BRIDGE_API_KEY` | Same value as `FINGERPRINT_API_KEY` (authenticates GymFlow → bridge requests) |
 | `FINGERPRINT_BRIDGE_URL` | See below |
 
 ### `FINGERPRINT_BRIDGE_URL` on Vercel

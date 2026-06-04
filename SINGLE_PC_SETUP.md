@@ -38,12 +38,16 @@ Port **4370 open** matters more than ping.
 |----------|-----------------|
 | `API_BASE_URL` | `http://localhost:3000` |
 | `API_KEY` | Same string as `FINGERPRINT_API_KEY` in `.env.local` |
+| `BRIDGE_API_KEY` | **Same** as `API_KEY` (shared secret that secures the bridge's own API) |
 | `DEVICE_IP` | IP from device menu |
 | `DEVICE_PORT` | `4370` (or device setting) |
 | `DEVICE_ID` | UUID after saving in Admin → Devices |
 | `MODE` | `real` |
 
 Generate one shared secret, e.g. `openssl rand -hex 32` or any long random string.
+
+> **Security note:** The bridge API now requires authentication via `x-bridge-api-key` header on every request (except `/health`).
+> The bridge also binds to `127.0.0.1` (localhost only) — it is NOT accessible from other devices on the network.
 
 ## 3. Database
 
@@ -88,7 +92,7 @@ npm run dev
 |-------|----------------|
 | App | http://localhost:3000 |
 | Bridge health | http://localhost:5050/health → `"state": "online"` |
-| Manual sync | `Invoke-WebRequest -Method POST http://localhost:5050/sync-attendance` |
+| Manual sync | `Invoke-WebRequest -Method POST http://localhost:5050/sync-attendance -Headers @{"x-bridge-api-key"="your_key"}` |
 | Scan test | Scan finger on device, wait up to 5 min (or run manual sync) |
 
 ## 7. Register fingerprint & mark attendance

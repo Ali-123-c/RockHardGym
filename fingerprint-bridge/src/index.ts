@@ -19,6 +19,11 @@ async function bootstrap() {
     process.exit(1)
   }
 
+  if (!config.service.authKey) {
+    logger.error('CRITICAL: BRIDGE_API_KEY is missing in .env — this key secures the bridge API server')
+    process.exit(1)
+  }
+
   // Initialize local JSON cache for failed/unsynced attendance records
   initDB()
   requeueFailedSyncLogs()

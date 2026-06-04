@@ -1,6 +1,10 @@
 /** Lightweight in-memory cache for GET API responses.
  *  Caches responses for a configurable TTL to avoid redundant Supabase queries
  *  when users navigate between pages quickly.
+ *
+ *  NOTE: In serverless environments (Vercel), the cache is DISABLED because
+ *  multiple server instances mean cache invalidation on one instance doesn't
+ *  affect others — causing stale data on subsequent requests.
  */
 
 interface CacheEntry<T> {
@@ -9,9 +13,10 @@ interface CacheEntry<T> {
 }
 
 const store = new Map<string, CacheEntry<unknown>>()
+const IS_SERVERLESS = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined
 
-// Clean up expired entries every 30 seconds
-if (typeof setInterval !== 'undefined') {
+// Only run the cleanup interval in non-serverless environments
+if (!IS_SERVERLESS && typeof setInterval !== 'undefined') {
   setInterval(() => {
     const now = Date.now()
     for (const [key, entry] of store) {
@@ -27,6 +32,12 @@ export function withApiCache<T>(
   ttlMs: number,
   fetcher: () => Promise<T>
 ): Promise<T> {
+  // In serverless, always bypass cache — instances are not shared, so caching
+  // causes stale data when a mutation hits a different instance than the read.
+  if (IS_SERVERLESS) {
+    return fetcher()
+  }
+
   const now = Date.now()
   const existing = store.get(key)
 

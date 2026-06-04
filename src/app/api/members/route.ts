@@ -117,7 +117,8 @@ export async function GET(request: NextRequest) {
       success: true,
       ...result,
     })
-    response.headers.set('Cache-Control', 'public, max-age=5, s-maxage=10, stale-while-revalidate=30')
+    // No browser caching — ensures the UI always reflects the latest mutations
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
     return response
   } catch (error: any) {
     console.error('GET /members error:', error)

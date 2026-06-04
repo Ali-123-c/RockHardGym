@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { validateFingerprintApiKey } from '@/lib/fingerprint-auth'
 import {
   buildMemberLookupMap,
@@ -13,6 +13,7 @@ async function markAttendance(
   memberId: string,
   timestamp: string
 ): Promise<'created' | 'exists' | 'error'> {
+  const supabase = getSupabase()
   const scanDate = localDateFromTimestamp(timestamp)
 
   const { data: existing } = await supabase
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Invalid payload' }, { status: 400 })
     }
 
+    const supabase = getSupabase()
     const { data: deviceRow, error: deviceError } = await supabase
       .from('fingerprint_devices')
       .select('id')

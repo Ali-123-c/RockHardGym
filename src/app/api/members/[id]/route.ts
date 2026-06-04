@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { invalidateApiCache } from '@/lib/api-cache'
 
 // GET /api/members/[id] - Get member by ID
@@ -10,6 +10,7 @@ export async function GET(
   try {
     const { id } = await context.params
     
+    const supabase = getSupabase()
     let retries = 2
     let member = null
     let error = null
@@ -63,6 +64,7 @@ export async function PUT(
     const { id } = await context.params
     const body = await request.json()
     
+    const supabase = getSupabase()
     let retries = 2
     let updated = null
     let error = null
@@ -138,6 +140,7 @@ export async function DELETE(
   try {
     const { id } = await context.params
     
+    const supabase = getSupabase()
     let retries = 2
     let error = null
 

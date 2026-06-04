@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 
 export async function GET(req: Request) {
   try {
@@ -7,6 +7,7 @@ export async function GET(req: Request) {
     const deviceId = searchParams.get('device_id')
     const limit = parseInt(searchParams.get('limit') || '50')
 
+    const supabase = getSupabase()
     let query = supabase
       .from('sync_logs')
       .select('*, fingerprint_devices(device_name)')

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 
 export async function GET(request: NextRequest) {
   // Authenticate Cron Job
@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const supabase = getSupabase()
     const { data: members, error: membersError } = await supabase
       .from('members')
       .select('id, joining_date, exemption_month')

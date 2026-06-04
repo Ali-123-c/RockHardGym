@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { withRetry } from '@/lib/withRetry'
 import { withApiCache, invalidateApiCache } from '@/lib/api-cache'
 
@@ -15,6 +15,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const supabase = getSupabase()
 
     // Check if phone or membership already exists
     const { data: existingByPhone } = await supabase
@@ -94,6 +96,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
 
+    const supabase = getSupabase()
     const cacheKey = `members:${search || 'all'}`
 
     const result = await withApiCache(cacheKey, 5_000, async () => {

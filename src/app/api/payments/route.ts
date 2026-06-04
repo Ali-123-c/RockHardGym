@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { withRetry } from '@/lib/withRetry'
 import { withApiCache, invalidateApiCache } from '@/lib/api-cache'
 
@@ -15,6 +15,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const supabase = getSupabase()
 
     // Insert payment record with retry logic
     const paymentData = await withRetry(async () => {
@@ -70,6 +72,7 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get('month')
     const member_id = searchParams.get('member_id')
 
+    const supabase = getSupabase()
     const cacheKey = `payments:${status || 'all'}:${month || 'all'}:${member_id || 'all'}`
 
     const result = await withApiCache(cacheKey, 5_000, async () => {
@@ -105,7 +108,7 @@ export async function GET(request: NextRequest) {
 
       if (error) throw error
 
-      const totalRevenue = (data || []).reduce((sum, p) => sum + Number(p.amount || 0), 0)
+      const totalRevenue = (data || []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
 
       return { data: data || [], count: data?.length || 0, totalRevenue }
     })

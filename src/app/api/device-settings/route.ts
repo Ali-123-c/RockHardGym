@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { writeFile, readFile } from 'fs/promises'
 import { join } from 'path'
 
@@ -68,6 +68,7 @@ async function updateFingerprintBridgeEnv(ipAddress: string, port: number) {
 
 export async function GET() {
   try {
+    const supabase = getSupabase()
     const { data, error } = await supabase
       .from('fingerprint_devices')
       .select('*')
@@ -107,6 +108,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabase()
     const body = await request.json()
     const deviceName = String(body.device_name || '').trim()
     const ipAddress = String(body.ip_address || '').trim()

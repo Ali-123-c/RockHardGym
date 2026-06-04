@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { checkDeviceUser, registerDeviceUser, startDeviceEnrollment, triggerBridgeSync } from '@/lib/bridge-client'
 
 async function getMember(id: string) {
+  const supabase = getSupabase()
   const { data, error } = await supabase
     .from('members')
     .select('id, name, membership_no, status')

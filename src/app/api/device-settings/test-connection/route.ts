@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { testDeviceConnection } from '@/lib/device-connection'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
 
@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
     const result = await testDeviceConnection({ ipAddress, port })
 
     if (deviceId) {
+      const supabase = getSupabase()
       const healthPayload = {
         device_id: deviceId,
         status: result.status,

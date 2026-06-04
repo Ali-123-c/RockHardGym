@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { withRetry } from '@/lib/withRetry'
 
 // POST /api/attendance - Mark attendance (from fingerprint or manual)
@@ -14,6 +14,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const supabase = getSupabase()
 
     // Check if member exists with retries for transient failures
     const member = await withRetry(async () => {
@@ -162,6 +164,7 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date')
     const member_id = searchParams.get('member_id')
 
+    const supabase = getSupabase()
     let query = supabase
       .from('attendance')
       .select(`

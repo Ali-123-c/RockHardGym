@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { validateFingerprintApiKey } from '@/lib/fingerprint-auth'
 
 // The Bridge service calls this to report its health
@@ -14,6 +14,8 @@ export async function POST(req: Request) {
     if (!device_id || !status) {
       return NextResponse.json({ success: false, error: 'Invalid payload' }, { status: 400 })
     }
+
+    const supabase = getSupabase()
 
     // Insert health log
     await supabase.from('device_health_logs').insert({
@@ -39,6 +41,7 @@ export async function POST(req: Request) {
 // The Admin Dashboard can call this to get overall system status
 export async function GET() {
   try {
+    const supabase = getSupabase()
     const { data: devices, error } = await supabase
       .from('fingerprint_devices')
       .select('*')

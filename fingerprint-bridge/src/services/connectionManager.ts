@@ -222,6 +222,38 @@ class ConnectionManager {
       await this.connect()
     }, config.service.reconnectIntervalMs)
   }
+
+  /**
+   * Hot-reload: disconnect from the current device, create a new device instance
+   * using the updated config, and attempt to reconnect.
+   * Returns the new connection status.
+   */
+  async reconnectWithConfig() {
+    logger.connection('Hot-reload triggered — reconnecting device with new config...')
+
+    // Cancel any pending reconnect timers
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+
+    // Disconnect from the old device
+    await this.disconnect()
+
+    // Create a new device instance with the updated config
+    this.device = config.mode === 'simulator' ? new SimulatorDevice() : new ZKDevice()
+
+    // Update status with new IP/port
+    this.status.ip = config.device.ip
+    this.status.port = config.device.port
+    this.status.reconnectAttempts = 0
+
+    // Attempt new connection
+    await this.connect()
+
+    logger.connection(`Hot-reload complete — device status: ${this.status.state}`)
+    return this.getStatus()
+  }
 }
 
 export const connectionManager = new ConnectionManager()

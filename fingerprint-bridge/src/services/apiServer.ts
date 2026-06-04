@@ -1,5 +1,5 @@
 import http, { IncomingMessage, ServerResponse } from 'http'
-import { config } from '../config'
+import { config, reloadConfig } from '../config'
 import { getLocalSyncStats } from '../storage/localStore'
 import { logger } from '../utils/logger'
 import { connectionManager } from './connectionManager'
@@ -145,6 +145,38 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       }
       const result = await connectionManager.registerMemberOnDevice({ userId, name })
       sendJson(response, 200, { success: true, ...result })
+      return
+    }
+
+    if (method === 'POST' && url.pathname === '/reconnect') {
+      // Read new IP/port from request body (optional — falls back to .env file)
+      const bodyStr = await readBody(request).catch(() => '{}')
+      const body = JSON.parse(bodyStr || '{}')
+
+      if (body.ip_address) {
+        config.device.ip = String(body.ip_address).trim()
+        config.device.port = parseInt(body.port, 10) || config.device.port
+        logger.info(`Hot-reload: config updated from request body — ${config.device.ip}:${config.device.port}`)
+      } else {
+        // No IP in body — reload from .env file
+        const changed = reloadConfig()
+        if (changed.length > 0) {
+          logger.info(`Hot-reload: .env changed — ${changed.join(', ')}`)
+        } else {
+          logger.info('Hot-reload: .env file checked — no changes detected')
+        }
+      }
+
+      const status = await connectionManager.reconnectWithConfig()
+
+      sendJson(response, status.state === 'online' ? 200 : 200, {
+        success: true,
+        message:
+          status.state === 'online'
+            ? `Reconnected successfully to ${config.device.ip}:${config.device.port}`
+            : `Reconnection initiated — device at ${config.device.ip}:${config.device.port} is ${status.state}`,
+        device: status,
+      })
       return
     }
 

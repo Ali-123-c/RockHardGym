@@ -1,7 +1,8 @@
+import fs from 'fs'
 import { logger } from './utils/logger'
 import { initDB, requeueFailedSyncLogs, requeueRecentLogs } from './storage/localStore'
 import { startScheduler } from './services/scheduler'
-import { config } from './config'
+import { config, envPath, reloadConfig } from './config'
 import { startApiServer } from './services/apiServer'
 import { connectionManager } from './services/connectionManager'
 
@@ -38,9 +39,31 @@ async function bootstrap() {
   // Start the automated syncing process
   startScheduler()
 
+  // ── File watcher: hot-reload when .env changes ─────────────────────────
+  // When the device IP/port is updated via the GymFlow web UI, the
+  // device-settings API writes to fingerprint-bridge/.env. This watcher
+  // detects the change and reconnects the device without restarting.
+  logger.info(`Watching ${envPath} for config changes...`)
+  fs.watchFile(envPath, { interval: 2000 }, async (curr, prev) => {
+    if (curr.mtimeMs === prev.mtimeMs) return // No real change
+
+    logger.info('Detected .env file change — reloading config and reconnecting device...')
+
+    const changed = reloadConfig()
+    if (changed.length > 0) {
+      logger.info(`Config changes detected: ${changed.join(', ')}`)
+    }
+
+    // Always reconnect when .env changes, even if the reload didn't detect
+    // a diff (could be whitespace or unhandled var). The reconnect is lightweight
+    // if the device is already connected with the same settings.
+    await connectionManager.reconnectWithConfig()
+  })
+
   // Handle graceful shutdown
   const shutdown = async () => {
     logger.info('Shutting down Fingerprint Bridge Service...')
+    fs.unwatchFile(envPath)
     server.close()
     await connectionManager.stop()
     process.exit(0)

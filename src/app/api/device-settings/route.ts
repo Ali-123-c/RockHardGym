@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { writeFile, readFile } from 'fs/promises'
 import { join } from 'path'
+import { triggerBridgeReconnect } from '@/lib/bridge-client'
 
 const DEFAULT_DEVICE = {
   device_name: 'ZKTeco K70',
@@ -151,6 +152,14 @@ export async function POST(request: NextRequest) {
 
     // Update fingerprint-bridge/.env with new IP and port (only in local environment)
     await updateFingerprintBridgeEnv(ipAddress, port)
+
+    // Notify the bridge to hot-reload the new config (non-blocking — don't fail if bridge is offline)
+    // This avoids needing to restart the bridge service manually.
+    triggerBridgeReconnect(ipAddress, port).then((result) => {
+      console.log(`Bridge reconnect: ${result.message}`)
+    }).catch((err) => {
+      console.warn('Bridge reconnect call failed (bridge may be offline):', err.message)
+    })
 
     return NextResponse.json({
       success: true,

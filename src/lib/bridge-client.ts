@@ -104,3 +104,15 @@ export function triggerBridgeSync() {
     maxRetries: 1,
   })
 }
+
+export function triggerBridgeReconnect(ipAddress?: string, port?: number) {
+  const body: Record<string, unknown> = {}
+  if (ipAddress) body.ip_address = ipAddress
+  if (port) body.port = port
+  return bridgeFetch<{ success: boolean; message: string; device: unknown }>('/reconnect', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    maxRetries: 1,
+    timeoutMs: 30000, // reconnect can take time
+  })
+}

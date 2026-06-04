@@ -11,3 +11,22 @@ dist/
 build/
 *.log
 .DS_Store
+
+# Playwright
+playwright-report/
+test-results/
+
+# Lighthouse
+lighthouse-report/
+lighthouse-storage/
+
+# k6
+k6-output/
+
+# SonarQube
+.scannerwork/
+
+# OWASP ZAP
+zap-report.html
+zap-report.json
+nul

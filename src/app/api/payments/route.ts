@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { withRetry } from '@/lib/withRetry'
+import { withApiCache } from '@/lib/api-cache'
 
 // POST /api/payments - Record a payment
 export async function POST(request: NextRequest) {
@@ -14,22 +16,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Insert payment record
-    const { data: paymentData, error: paymentError } = await supabase
-      .from('payments')
-      .insert([
-        {
-          member_id,
-          amount: parseFloat(amount),
-          payment_date: payment_date || new Date().toISOString().split('T')[0],
-          month,
-          status: 'Paid'
-        }
-      ])
-      .select()
-      .single()
+    // Insert payment record with retry logic
+    const paymentData = await withRetry(async () => {
+      const { data, error } = await supabase
+        .from('payments')
+        .insert([
+          {
+            member_id,
+            amount: parseFloat(amount),
+            payment_date: payment_date || new Date().toISOString().split('T')[0],
+            month,
+            status: 'Paid'
+          }
+        ])
+        .select()
+        .single()
 
-    if (paymentError) throw paymentError
+      if (error) throw error
+      return data
+    })
 
     // Automatically update the member status to Active
     const { error: memberError } = await supabase
@@ -61,47 +66,52 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get('month')
     const member_id = searchParams.get('member_id')
 
-    let query = supabase
-      .from('payments')
-      .select(`
-        id,
-        member_id,
-        amount,
-        payment_date,
-        month,
-        status,
-        created_at,
-        members (
-          name,
-          membership_no,
-          phone,
-          status
-        )
-      `)
+    const cacheKey = `payments:${status || 'all'}:${month || 'all'}:${member_id || 'all'}`
 
-    if (status) {
-      query = query.eq('status', status)
-    }
-    if (month) {
-      query = query.eq('month', month)
-    }
-    if (member_id) {
-      query = query.eq('member_id', member_id)
-    }
+    const result = await withApiCache(cacheKey, 5_000, async () => {
+      let query = supabase
+        .from('payments')
+        .select(`
+          id,
+          member_id,
+          amount,
+          payment_date,
+          month,
+          status,
+          created_at,
+          members (
+            name,
+            membership_no,
+            phone,
+            status
+          )
+        `)
 
-    const { data, error } = await query.order('payment_date', { ascending: false })
+      if (status) {
+        query = query.eq('status', status)
+      }
+      if (month) {
+        query = query.eq('month', month)
+      }
+      if (member_id) {
+        query = query.eq('member_id', member_id)
+      }
 
-    if (error) throw error
+      const { data, error } = await query.order('payment_date', { ascending: false })
 
-    // Compute total revenue
-    const totalRevenue = (data || []).reduce((sum, p) => sum + Number(p.amount || 0), 0)
+      if (error) throw error
 
-    return NextResponse.json({
-      success: true,
-      data: data || [],
-      count: data?.length || 0,
-      totalRevenue,
+      const totalRevenue = (data || []).reduce((sum, p) => sum + Number(p.amount || 0), 0)
+
+      return { data: data || [], count: data?.length || 0, totalRevenue }
     })
+
+    const response = NextResponse.json({
+      success: true,
+      ...result,
+    })
+    response.headers.set('Cache-Control', 'public, max-age=5, s-maxage=10, stale-while-revalidate=30')
+    return response
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to fetch payments' },

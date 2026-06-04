@@ -1,0 +1,90 @@
+# OWASP ZAP Security Scan Configuration for GymFlow
+# Usage: docker run -v $(pwd):/zap/wrk:rw -t softwaresecurityproject/zap-stable zap-full-scan.py -t http://host.docker.internal:3000 -c /zap/wrk/tests/security/zap-config.yaml -r zap-report.html
+
+# Context definition
+contexts:
+  - name: GymFlow
+    urls:
+      - http://localhost:3000
+      - http://localhost:3000/api
+    includePaths:
+      - "/.*"
+    excludePaths:
+      - "/_next/static/.*"
+      - "/favicon\\.ico"
+      - "/__nextjs.*"
+    authentication:
+      method: form
+      loginUrl: http://localhost:3000/login
+      loginRequest:
+        data: "email={%email%}&password={%password%}"
+        followRedirects: true
+      tokenExtraction:
+        name: "csrf-token"
+        header: "X-CSRF-Token"
+    sessionManagement:
+      method: cookie
+      cookieName: "sb-*-auth-token"
+    users:
+      - name: Admin
+        credentials:
+          email: "${ZAP_ADMIN_EMAIL}"
+          password: "${ZAP_ADMIN_PASSWORD}"
+
+# Alert thresholds
+alerts:
+  - name: SQL Injection
+    risk: high
+    confidence: medium
+    
+  - name: XSS (Cross Site Scripting)
+    risk: high
+    confidence: medium
+
+  - name: CSRF (Cross Site Request Forgery)
+    risk: medium
+    confidence: low
+    ignore:
+      - url: "/api/.*"
+        parameter: ".*"
+        
+  - name: Path Traversal
+    risk: high
+    confidence: medium
+
+  - name: Remote Code Execution
+    risk: high
+    confidence: medium
+
+# Scan policies
+scanPolicy:
+  name: GymFlow Security Policy
+  rules:
+    - id: 40012  # SQL Injection
+      alertThreshold: HIGH
+    - id: 40014  # XSS
+      alertThreshold: HIGH
+    - id: 6      # Path Traversal
+      alertThreshold: HIGH
+    - id: 10021  # X-Content-Type-Options
+      alertThreshold: LOW
+    - id: 10020  # Anti-clickjacking Header
+      alertThreshold: LOW
+
+# Passive scan config
+passiveScan:
+  maxAlertsPerRule: 50
+  enableTags: true
+
+# Active scan config
+activeScan:
+  maxScansInUI: 5
+  showAdvancedDialog: false
+  defaultPolicy: GymFlow Security Policy
+
+# Report configuration
+report:
+  title: "GymFlow Security Scan Report"
+  template: "traditional-html"
+  theme: "light"
+  includePassing: false

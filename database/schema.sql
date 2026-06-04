@@ -46,24 +46,16 @@ CREATE INDEX idx_payments_member_id ON payments(member_id);
 CREATE INDEX idx_payments_month ON payments(month);
 CREATE INDEX idx_members_phone ON members(phone);
 CREATE INDEX idx_members_status ON members(status);
+CREATE INDEX idx_members_membership_no ON members(membership_no);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 
--- Create basic RLS policies (allow anonymous access for MVP)
-CREATE POLICY "Allow anon users full access to members"
-  ON members FOR ALL
-  USING (true)
-  WITH CHECK (true);
-
-CREATE POLICY "Allow anon users full access to attendance"
-  ON attendance FOR ALL
-  USING (true)
-  WITH CHECK (true);
-
-CREATE POLICY "Allow anon users full access to payments"
-  ON payments FOR ALL
-  USING (true)
-  WITH CHECK (true);
+-- Note: No anonymous write/update/delete policies are created.
+-- The Next.js API uses the SUPABASE_SERVICE_ROLE_KEY to safely bypass RLS for writes.
+-- However, anon SELECT is required on attendance for browser real-time subscriptions:
+CREATE POLICY "Enable anon read access for attendance realtime"
+  ON attendance FOR SELECT
+  USING (true);

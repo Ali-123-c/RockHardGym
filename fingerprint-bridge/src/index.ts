@@ -43,6 +43,16 @@ async function bootstrap() {
 
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
+
+  // Prevent crash from device protocol errors (e.g. node-zklib TypeError on timeout)
+  // The bridge should stay alive even if the device is unresponsive
+  process.on('uncaughtException', (error) => {
+    logger.error('Uncaught exception (bridge will continue running):', error)
+  })
+
+  process.on('unhandledRejection', (reason) => {
+    logger.error('Unhandled promise rejection (bridge will continue running):', reason as any)
+  })
 }
 
 bootstrap().catch(error => {

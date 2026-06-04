@@ -2,7 +2,7 @@ import { config } from '../config'
 import { logger } from '../utils/logger'
 import { SimulatorDevice } from '../zkteco/simulator'
 import { ZKDevice, ZkAttendance, ZkDeviceUser } from '../zkteco/device'
-import { handleRealtimeScan, isRealtimeListenerStarted, markRealtimeListenerStarted } from './realtimeSync'
+import { handleRealtimeScan } from './realtimeSync'
 
 type BridgeDevice = {
   connect(): Promise<boolean>
@@ -79,7 +79,15 @@ class ConnectionManager {
       const connected = await this.device.connect()
 
       if (!connected) {
-        throw new Error(`Unable to connect to device at ${config.device.ip}:${config.device.port}`)
+        this.status = {
+          ...this.status,
+          state: 'error',
+          lastDisconnectedAt: new Date().toISOString(),
+          lastError: `TCP connection to ${config.device.ip}:${config.device.port} failed — check IP, power, and firewall`,
+        }
+        logger.error(this.status.lastError || 'Connection failed')
+        this.scheduleReconnect()
+        return false
       }
 
       this.status = {
@@ -135,7 +143,21 @@ class ConnectionManager {
 
   async getDeviceUsers() {
     await this.ensureConnected()
-    return this.device.getUsers()
+
+    try {
+      return await this.device.getUsers()
+    } catch (error: any) {
+      this.status = {
+        ...this.status,
+        connected: false,
+        state: 'error',
+        lastDisconnectedAt: new Date().toISOString(),
+        lastError: error?.message || String(error)
+      }
+      logger.error('Failed to read device users from device', error)
+      this.scheduleReconnect()
+      throw error
+    }
   }
 
   async registerMemberOnDevice(params: { userId: string; name: string }) {
@@ -175,10 +197,8 @@ class ConnectionManager {
   }
 
   private startRealtimeIfSupported() {
-    if (isRealtimeListenerStarted()) return
     if (typeof this.device.startRealtimeListener !== 'function') return
 
-    markRealtimeListenerStarted()
     this.device.startRealtimeListener((log) => {
       handleRealtimeScan(log).catch((error) => {
         logger.error('Realtime attendance sync failed', error)

@@ -105,6 +105,7 @@ export async function POST(req: Request) {
       const { error: insertError } = await supabase.from('attendance_logs').insert({
         member_id: memberId,
         member_name: memberName,
+        enroll_number: enrollRaw,
         device_id,
         event_type: eventType,
         timestamp: log.timestamp,
@@ -152,13 +153,16 @@ export async function POST(req: Request) {
       .update({ last_sync: new Date().toISOString(), status: 'Online' })
       .eq('id', device_id)
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       synced: recordsSynced,
       attendance_marked: attendanceMarked,
       unmatched: unmatchedList.length > 0 ? unmatchedList : undefined,
       errors: errors.length > 0 ? errors : undefined,
     })
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+    response.headers.set('Pragma', 'no-cache')
+    return response
   } catch (error: any) {
     console.error('Sync Error:', error)
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })

@@ -1,10 +1,37 @@
-// @ts-ignore
-import ZKLib from 'node-zklib'
-// @ts-ignore
-import { COMMANDS } from 'node-zklib/constants'
+import ZktecoJs from 'zkteco-js'
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { encodeUserData72 } from './userCodec'
+
+// Command constants (same protocol as zkteco-js uses internally)
+const CMD_DISABLEDEVICE = 1003
+const CMD_AUTH = 1102
+const CMD_USER_WRQ = 8
+const CMD_STARTENROLL = 61
+const CMD_CAPTUREFINGER = 1009
+
+function getZkErrorMessage(error: unknown): string {
+  if (!error) return 'Unknown error'
+  if (typeof error === 'string') return error
+
+  const anyError = error as any
+  if (typeof anyError.err?.message === 'string' && anyError.err.message.trim()) {
+    return anyError.err.message
+  }
+  if (typeof anyError.message === 'string' && anyError.message.trim()) {
+    return anyError.message
+  }
+  if (typeof anyError.toString === 'function') {
+    const str = anyError.toString()
+    if (str && str !== '[object Object]') return str
+  }
+
+  try {
+    return JSON.stringify(error, Object.getOwnPropertyNames(error))
+  } catch {
+    return String(error)
+  }
+}
 
 export interface ZkAttendance {
   userSn: string
@@ -23,15 +50,113 @@ export interface ZkDeviceUser {
 export class ZKDevice {
   private zkInstance: any
   private isConnected = false
-  private realtimeStarted = false
+  private realtimeActive = false
 
   constructor() {
-    this.zkInstance = new ZKLib(config.device.ip, config.device.port, 10000, 4000)
+    this.createZkInstance()
+  }
+
+  private createZkInstance() {
+    // zkteco-js constructor: (ip, port, timeout, inport)
+    this.zkInstance = new ZktecoJs(config.device.ip, config.device.port, 10000, 4000)
+  }
+
+  private async resetConnection() {
+    this.isConnected = false
+    try {
+      await this.zkInstance.disconnect()
+    } catch (error) {
+      logger.warn('Failed to disconnect broken ZKTeco instance:', error)
+    }
+    this.createZkInstance()
+  }
+
+  /** Decode command ID from a response buffer returned by executeCmd */
+  private getResponseCommandId(response: Buffer): number | null {
+    try {
+      if (Buffer.isBuffer(response) && response.length >= 2) {
+        return response.readUInt16LE(0)
+      }
+    } catch {}
+    return null
+  }
+
+  private getResponseSessionId(response: Buffer): number | null {
+    try {
+      if (Buffer.isBuffer(response) && response.length >= 8) {
+        return response.readUInt16LE(4)
+      }
+    } catch {}
+    return null
+  }
+
+  /** Send a command and log the raw response code for debugging */
+  private async execAndLog(label: string, cmd: number, data: string | Buffer): Promise<boolean> {
+    try {
+      const response: any = await this.zkInstance.executeCmd(cmd, data)
+      const cmdId = this.getResponseCommandId(response)
+      const sessId = this.getResponseSessionId(response)
+      const names: Record<number, string> = {
+        2000: 'ACK_OK', 2001: 'ACK_ERROR', 2005: 'UNAUTH',
+        1500: 'PREPARE_DATA', 1501: 'DATA', 1502: 'FREE_DATA',
+        1000: 'CONNECT', 1102: 'AUTH', 1003: 'DISABLE_DEVICE'
+      }
+      const name = cmdId ? (names[cmdId] || `CMD_${cmdId}`) : 'NO_RESPONSE'
+      logger.device(`${label}: response=${name} session=${sessId ?? '?'}`)
+      return cmdId === 2000 // ACK_OK means success
+    } catch (err: any) {
+      logger.warn(`${label}: FAILED — ${err.message || err}`)
+      return false
+    }
   }
 
   async connect(): Promise<boolean> {
     try {
-      await this.zkInstance.createSocket()
+      // zkteco-js createSocket() handles both TCP connection AND CMD_CONNECT
+      const connected = await this.zkInstance.createSocket()
+      if (!connected) {
+        logger.error('createSocket returned false — device may be unreachable')
+        return false
+      }
+      logger.info('ZKTeco CONNECT successful, session established')
+
+      // Step 1: Authenticate with device password (if configured)
+      // CMD_AUTH with wrong password can break the session — skip by default
+      const password = config.device.password || ''
+      if (password) {
+        const passwordNum = parseInt(password, 10)
+        if (!Number.isNaN(passwordNum)) {
+          const authBuf = Buffer.alloc(12)
+          authBuf.writeUInt32LE(passwordNum, 0)
+          const authOk = await this.execAndLog('AUTH', CMD_AUTH, authBuf)
+          if (!authOk) {
+            logger.warn(
+              `AUTH returned non-ACK_OK (password=${password}) — continuing...`
+            )
+          }
+        }
+      } else {
+        logger.device('AUTH: skipped (no password configured)')
+      }
+
+      // Step 2: Disable device for data access
+      try {
+        const disableOk = await this.execAndLog('DISABLE_DEVICE', CMD_DISABLEDEVICE, Buffer.from([0, 0, 0, 0]))
+        if (!disableOk) {
+          logger.warn('DISABLE_DEVICE returned non-ACK_OK (device may not require it)')
+        }
+      } catch (err) {
+        logger.warn('DISABLE_DEVICE failed:', err)
+      }
+
+      // Step 3: Free any pending data buffers
+      try {
+        await this.zkInstance.freeData()
+        logger.info('FREE_DATA completed')
+      } catch (freeError) {
+        logger.warn('FREE_DATA failed:', freeError)
+      }
+
       this.isConnected = true
       logger.info(`Connected to ZKTeco device at ${config.device.ip}:${config.device.port}`)
       return true
@@ -44,6 +169,7 @@ export class ZKDevice {
 
   async disconnect(): Promise<void> {
     try {
+      this.realtimeActive = false
       if (this.isConnected) {
         await this.zkInstance.disconnect()
         this.isConnected = false
@@ -54,6 +180,27 @@ export class ZKDevice {
     }
   }
 
+  private async resolveDeviceUserId(raw: string | number | null | undefined): Promise<string> {
+    const value = String(raw ?? '').replace(/\0/g, '').trim()
+    if (!value) return ''
+
+    if (/^\d+$/.test(value)) {
+      try {
+        const users = await this.getUsers()
+        const match = users.find((user) => String(user.uid) === value)
+        if (match) {
+          logger.info(`Resolved device UID ${value} to userId ${match.userId}`)
+          return match.userId
+        }
+        logger.warn(`Could not resolve numeric device UID ${value} to any registered userId`)
+      } catch (error) {
+        logger.warn(`Failed to fetch users for UID resolution, using raw value: ${value}`, error)
+      }
+    }
+
+    return value
+  }
+
   async getAttendanceLogs(): Promise<ZkAttendance[]> {
     if (!this.isConnected) {
       const connected = await this.connect()
@@ -61,31 +208,56 @@ export class ZKDevice {
     }
 
     try {
-      const logs = await this.zkInstance.getAttendances()
-      return (logs.data || []).map((log: ZkAttendance) => ({
-        userSn: log.userSn,
-        deviceUserId: String(log.deviceUserId ?? '').replace(/\0/g, '').trim() || String(log.userSn ?? ''),
-        recordTime: log.recordTime,
-      }))
-    } catch (error) {
+      const result = await this.zkInstance.getAttendances()
+      // zkteco-js returns records with fields: sn, user_id, record_time (string), type, state
+      return await Promise.all(
+        (result?.data || []).map(async (log: any) => {
+          const userSn = String(log.sn ?? '').replace(/\0/g, '').trim()
+          const rawId = String(log.user_id ?? '').replace(/\0/g, '').trim() || userSn
+          const resolvedId = await this.resolveDeviceUserId(rawId)
+          if (resolvedId !== rawId) {
+            logger.info(`Attendance log raw user_id=${rawId} resolved to ${resolvedId}`)
+          }
+          return {
+            userSn,
+            deviceUserId: resolvedId || rawId,
+            recordTime: log.record_time, // already a string from zkteco-js
+          }
+        })
+      )
+    } catch (error: any) {
       logger.error('Error fetching attendance logs:', error)
+      // K50 may not support polling — rely on real-time listener instead
       return []
     }
   }
 
   startRealtimeListener(onScan: (log: { deviceUserId: string; userSn?: string; recordTime: Date }) => void) {
-    if (this.realtimeStarted || !this.isConnected) return
+    if (!this.isConnected) return
 
-    this.realtimeStarted = true
+    this.realtimeActive = true
     logger.info('Listening for real-time fingerprint scans on device...')
 
+    // zkteco-js getRealTimeLogs callback receives { userId, attTime }
     this.zkInstance.getRealTimeLogs((data: { userId?: string; attTime?: Date }) => {
-      const deviceUserId = String(data?.userId ?? '').replace(/\0/g, '').trim()
-      if (!deviceUserId || !data?.attTime) return
+      const rawUserId = String(data?.userId ?? '').replace(/\0/g, '').trim()
+      const attTime = data?.attTime
+      if (!rawUserId || !attTime) return
 
-      onScan({
-        deviceUserId,
-        recordTime: data.attTime,
+      this.resolveDeviceUserId(rawUserId).then((resolvedUserId) => {
+        if (resolvedUserId !== rawUserId) {
+          logger.info(`Realtime scan raw userId=${rawUserId} mapped to ${resolvedUserId}`)
+        }
+        onScan({
+          deviceUserId: resolvedUserId || rawUserId,
+          recordTime: attTime,
+        })
+      }).catch((error) => {
+        logger.warn(`Realtime scan: UID resolution failed for ${rawUserId}, using raw value`, error)
+        onScan({
+          deviceUserId: rawUserId,
+          recordTime: attTime,
+        })
       })
     })
   }
@@ -110,6 +282,7 @@ export class ZKDevice {
 
     try {
       const result = await this.zkInstance.getUsers()
+      // zkteco-js returns users with: uid, role, name, userId, cardno, password
       return (result?.data || []).map((user: ZkDeviceUser) => ({
         uid: user.uid,
         role: user.role,
@@ -117,8 +290,9 @@ export class ZKDevice {
         userId: String(user.userId || '').trim(),
         cardno: user.cardno ?? 0,
       }))
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error fetching device users:', error)
+      // K50 may not support user list — return empty array so enrollment can still work
       return []
     }
   }
@@ -129,31 +303,50 @@ export class ZKDevice {
       if (!connected) throw new Error('Device is offline')
     }
 
-    const existing = await this.getUsers()
-    const userId = params.userId.slice(0, 9)
-    const found = existing.find(
-      (user) => user.userId === userId || user.userId === String(Number(userId))
-    )
+    const userId = params.userId
 
-    if (found) {
-      return { created: false, user: found }
+    // Check if user already exists on device (to avoid overwriting)
+    const existingUsers = await this.getUsers()
+    const existing = existingUsers.find(
+      (u) => u.userId === userId || u.userId === String(Number(userId))
+    )
+    if (existing) {
+      logger.info(`Device user ${userId} already exists (uid ${existing.uid}) — skipping create`)
+      return {
+        created: false,
+        user: existing,
+      }
     }
 
-    const maxUid = existing.reduce((max, user) => Math.max(max, user.uid), 0)
+    // Assign a unique UID: max existing UID + 1 (first user gets uid 1)
+    const maxUid = existingUsers.reduce((max, u) => Math.max(max, u.uid), 0)
     const uid = params.uid ?? maxUid + 1
-    const record = encodeUserData72({
-      uid,
-      role: 0,
-      password: '',
-      name: params.name.slice(0, 24),
-      userId,
-    })
-
-    await this.zkInstance.executeCmd(COMMANDS.CMD_USER_WRQ, record)
-    logger.info(`Created device user ${userId} (uid ${uid})`)
-    return {
-      created: true,
-      user: { uid, role: 0, name: params.name, userId, cardno: 0 },
+  
+    try {
+      if (typeof this.zkInstance.setUser === 'function') {
+        await this.zkInstance.setUser(uid, userId, params.name.slice(0, 24), '', 0, 0)
+      } else {
+        const record = encodeUserData72({
+          uid,
+          role: 0,
+          password: '',
+          name: params.name.slice(0, 24),
+          userId,
+        })
+        await this.zkInstance.executeCmd(CMD_USER_WRQ, record)
+      }
+      logger.info(`Created device user ${userId} (uid ${uid})`)
+      return {
+        created: true,
+        user: { uid, role: 0, name: params.name, userId, cardno: 0 },
+      }
+    } catch (error: any) {
+      // If already exists, treat as success
+      logger.warn(`Device user ${userId}: ${error?.message || error}`)
+      return {
+        created: false,
+        user: { uid, role: 0, name: params.name, userId, cardno: 0 },
+      }
     }
   }
 
@@ -164,17 +357,20 @@ export class ZKDevice {
       if (!connected) throw new Error('Device is offline')
     }
 
-    const pin = userId.slice(0, 9)
+    // Use userId directly as UID (K50 may not support getUsers)
+    const targetUid = parseInt(userId, 10) || 1
     const buffer = Buffer.alloc(4)
-    buffer.writeUInt32LE(parseInt(pin, 10) || 0, 0)
+    buffer.writeUInt32LE(targetUid, 0)
 
     try {
-      await this.zkInstance.executeCmd(COMMANDS.CMD_STARTENROLL, buffer)
-      logger.info(`Started fingerprint enrollment for user ${pin} (finger ${fingerIndex})`)
+      await this.zkInstance.executeCmd(CMD_STARTENROLL, buffer)
+      logger.info(
+        `Started fingerprint enrollment for user ${userId} (resolved uid ${targetUid}) finger ${fingerIndex}`
+      )
       return { success: true, mode: 'start_enroll' as const }
     } catch (error) {
       logger.warn('CMD_STARTENROLL failed, trying capture finger command', error)
-      await this.zkInstance.executeCmd(COMMANDS.CMD_CAPTUREFINGER, buffer)
+      await this.zkInstance.executeCmd(CMD_CAPTUREFINGER, buffer)
       return { success: true, mode: 'capture_finger' as const }
     }
   }

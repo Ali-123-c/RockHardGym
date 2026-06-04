@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Dumbbell, Users, Clock, CreditCard, LayoutDashboard, Menu, X, Fingerprint } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase-browser'
+import { Dumbbell, Users, Clock, CreditCard, LayoutDashboard, Menu, X, Fingerprint, LogOut, Loader2 } from 'lucide-react'
 
 const navLinks = [
   { href: '/',           label: 'Dashboard',  icon: LayoutDashboard },
@@ -15,8 +16,25 @@ const navLinks = [
 
 export function Navbar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const supabase = useMemo(() => createClient(), [])
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  const isLoginPage = pathname === '/login'
+
+  const handleLogout = async () => {
+    setLoggingOut(true)
+    try {
+      await supabase.auth.signOut()
+      router.push('/login')
+      router.refresh()
+    } catch {
+      // Even if signOut fails, still navigate to login
+      router.push('/login')
+    }
+  }
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20)
@@ -84,8 +102,22 @@ export function Navbar() {
               })}
             </nav>
 
-            {/* Right side badge */}
+            {/* Right side */}
             <div className="hidden md:flex items-center gap-3">
+              {!isLoginPage && (
+                <button
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all duration-200"
+                >
+                  {loggingOut ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <LogOut className="w-3.5 h-3.5" />
+                  )}
+                  Logout
+                </button>
+              )}
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="text-xs font-semibold text-emerald-400">Live</span>
@@ -131,6 +163,21 @@ export function Navbar() {
                 </Link>
               )
             })}
+
+            {!isLoginPage && (
+              <hr className="border-slate-200 my-2" />
+            )}
+
+            {!isLoginPage && (
+              <button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all duration-200"
+              >
+                {loggingOut ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+                Logout
+              </button>
+            )}
           </div>
         </div>
       </header>

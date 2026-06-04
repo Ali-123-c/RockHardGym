@@ -1,0 +1,156 @@
+{
+  "info": {
+    "name": "GymFlow API",
+    "description": "Complete API collection for the GymFlow gym management system",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "memberId", "value": "" },
+    { "key": "paymentId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Members",
+      "item": [
+        {
+          "name": "List All Members",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200))"], "type": "text/javascript" } }],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/members", "host": ["{{baseUrl}}"], "path": ["api", "members"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }]
+          }
+        },
+        {
+          "name": "Search Members",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/members?search={{searchTerm}}", "host": ["{{baseUrl}}"], "path": ["api", "members"], "query": [{ "key": "search", "value": "{{searchTerm}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "variable": [{ "key": "searchTerm", "value": "John" }]
+          }
+        },
+        {
+          "name": "Create Member",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/members", "host": ["{{baseUrl}}"], "path": ["api", "members"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"phone\": \"03001234567\",\n  \"membership_no\": \"M-{{$timestamp}}\",\n  \"city\": \"Karachi\",\n  \"address\": \"123 Main St\",\n  \"joining_date\": \"2026-06-01\",\n  \"fee_amount\": 5000\n}"
+            },
+            "event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 201', () => pm.response.to.have.status(201))", "pm.test('Has member id', () => {", "  const json = pm.response.json()", "  pm.expect(json.data.id).to.not.be.empty", "  pm.collectionVariables.set('memberId', json.data.id)", "})"], "type": "text/javascript" } }]
+          }
+        },
+        {
+          "name": "Get Member by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/members/{{memberId}}", "host": ["{{baseUrl}}"], "path": ["api", "members", "{{memberId}}"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }]
+          }
+        },
+        {
+          "name": "Update Member",
+          "request": {
+            "method": "PUT",
+            "url": { "raw": "{{baseUrl}}/api/members/{{memberId}}", "host": ["{{baseUrl}}"], "path": ["api", "members", "{{memberId}}"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"John Updated\",\n  \"fee_amount\": 6000\n}" }
+          }
+        },
+        {
+          "name": "Delete Member",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/api/members/{{memberId}}", "host": ["{{baseUrl}}"], "path": ["api", "members", "{{memberId}}"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Attendance",
+      "item": [
+        {
+          "name": "Get Attendance Records",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/attendance?date={{today}}", "host": ["{{baseUrl}}"], "path": ["api", "attendance"], "query": [{ "key": "date", "value": "{{today}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }]
+          }
+        },
+        {
+          "name": "Mark Attendance",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/attendance", "host": ["{{baseUrl}}"], "path": ["api", "attendance"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"member_id\": \"{{memberId}}\",\n  \"local_date\": \"{{today}}\"\n}" }
+          }
+        },
+        {
+          "name": "Mark Attendance (Idempotent)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/attendance", "host": ["{{baseUrl}}"], "path": ["api", "attendance"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"member_id\": \"{{memberId}}\",\n  \"local_date\": \"{{today}}\",\n  \"idempotency_key\": \"test-key-001\"\n}" },
+            "event": [{ "listen": "test", "script": { "exec": ["pm.test('Idempotent request returns 200', () => pm.response.to.have.status(200))", "pm.test('Has idempotent flag', () => {", "  const json = pm.response.json()", "  pm.expect(json.idempotent).to.be.true", "})"], "type": "text/javascript" } }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Get Payments",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/payments?month={{currentMonth}}", "host": ["{{baseUrl}}"], "path": ["api", "payments"], "query": [{ "key": "month", "value": "{{currentMonth}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }]
+          }
+        },
+        {
+          "name": "Record Payment",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/payments", "host": ["{{baseUrl}}"], "path": ["api", "payments"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"member_id\": \"{{memberId}}\",\n  \"amount\": 5000,\n  \"payment_date\": \"{{today}}\",\n  \"month\": \"{{currentMonth}}\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fingerprint / Device",
+      "item": [
+        {
+          "name": "Fingerprint Status",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/fingerprint/status", "host": ["{{baseUrl}}"], "path": ["api", "fingerprint", "status"] }
+          }
+        },
+        {
+          "name": "Device Settings",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/device-settings", "host": ["{{baseUrl}}"], "path": ["api", "device-settings"] }
+          }
+        },
+        {
+          "name": "Test Device Connection",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/device-settings/test-connection", "host": ["{{baseUrl}}"], "path": ["api", "device-settings", "test-connection"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }]
+          }
+        }
+      ]
+    }
+  ]
+}

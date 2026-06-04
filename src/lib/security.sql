@@ -16,3 +16,11 @@ DROP POLICY IF EXISTS "Enable insert access for all users" ON public.members;
 -- Since your Next.js backend uses the secure SERVICE_ROLE_KEY to interact with the database,
 -- it will bypass these RLS restrictions automatically.
 -- This guarantees that NO ONE can read or write to your database directly from the internet. All traffic MUST go through your secure, authenticated Next.js API!
+
+-- 3. Required: Allow anon SELECT on attendance for real-time subscriptions
+-- The Supabase Realtime client in the browser uses the anon key.
+-- Without this policy, the attendance realtime hook will fail to subscribe.
+-- This only allows reading attendance data (not inserting/updating/deleting).
+CREATE POLICY "Enable anon read access for attendance realtime"
+  ON public.attendance FOR SELECT
+  USING (true);

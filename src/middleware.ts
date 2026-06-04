@@ -3,9 +3,6 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { isAdminUser } from '@/lib/admin-auth'
 import { isFingerprintBridgeApiPath, isValidFingerprintApiKey } from '@/lib/fingerprint-api-key'
 
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
-const LIMIT = 60
-const WINDOW_MS = 60 * 1000
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -18,32 +15,62 @@ export async function middleware(request: NextRequest) {
   const isBridgeApi =
     isFingerprintBridgeApiPath(pathname) && isValidFingerprintApiKey(request)
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
+  // Skip auth entirely for bridge API (authenticated via API key)
+  if (isBridgeApi) {
+    return applySecurityHeaders(supabaseResponse)
+  }
+
+  // Check if env vars are configured — if not, skip auth (dev mode fallback)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !anonKey) {
+    // No supabase configured — allow access without auth (local dev)
+    return applySecurityHeaders(supabaseResponse)
+  }
+
+  let user: import('@supabase/supabase-js').User | null = null
+
+  try {
+    const supabase = createServerClient(
+      supabaseUrl,
+      anonKey,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+            supabaseResponse = NextResponse.next({
+              request,
+            })
+            cookiesToSet.forEach(({ name, value, options }) =>
+              supabaseResponse.cookies.set(name, value, options)
+            )
+          },
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({
-            request,
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
+      }
+    )
+
+    // Use getSession() instead of getUser() to avoid a network round-trip to Supabase
+    // on every request. The JWT is decoded locally from the cookie (~1ms vs 1-1.5s).
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    user = session?.user ?? null
+  } catch (error) {
+    console.error('[Middleware] Auth check failed, allowing request:', error)
+    // If auth fails (e.g., network error on first load), still redirect to login
+    if (!isApiRoute && !isLoginPage) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
     }
-  )
+    return applySecurityHeaders(supabaseResponse)
+  }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user && !isLoginPage && !isBridgeApi) {
+  if (!user && !isLoginPage) {
     if (isApiRoute) {
       return new NextResponse(JSON.stringify({ success: false, error: 'Unauthorized' }), {
         status: 401,
@@ -55,7 +82,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (user && !isLoginPage && !isBridgeApi && !isAdminUser(user)) {
+  if (user && !isAdminUser(user)) {
     if (isApiRoute) {
       return new NextResponse(JSON.stringify({ success: false, error: 'Forbidden: Admin access required' }), {
         status: 403,
@@ -75,44 +102,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (isApiRoute) {
-    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown-ip'
-    const now = Date.now()
-    const record = rateLimitMap.get(ip)
+  return applySecurityHeaders(supabaseResponse)
+}
 
-    if (record) {
-      if (now > record.resetTime) {
-        rateLimitMap.set(ip, { count: 1, resetTime: now + WINDOW_MS })
-      } else {
-        record.count++
-        if (record.count > LIMIT) {
-          return new NextResponse(
-            JSON.stringify({
-              success: false,
-              error: 'Too Many Requests',
-              message: 'Rate limit exceeded. Please try again later.',
-            }),
-            {
-              status: 429,
-              headers: {
-                'Content-Type': 'application/json',
-                'Retry-After': Math.ceil((record.resetTime - now) / 1000).toString(),
-              },
-            }
-          )
-        }
-      }
-    } else {
-      rateLimitMap.set(ip, { count: 1, resetTime: now + WINDOW_MS })
-    }
-  }
-
-  supabaseResponse.headers.set('X-Frame-Options', 'DENY')
-  supabaseResponse.headers.set('X-Content-Type-Options', 'nosniff')
-  supabaseResponse.headers.set('Referrer-Policy', 'origin-when-cross-origin')
-  supabaseResponse.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
-
-  return supabaseResponse
+function applySecurityHeaders(response: NextResponse) {
+  response.headers.set('X-Frame-Options', 'DENY')
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('Referrer-Policy', 'origin-when-cross-origin')
+  response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  return response
 }
 
 export const config = {

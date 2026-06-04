@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { withRetry } from '@/lib/withRetry'
+import { withApiCache } from '@/lib/api-cache'
 
 // POST /api/members - Create a new member
 export async function POST(request: NextRequest) {
@@ -42,52 +44,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Attempt to insert with retries for transient failures
-    let retries = 2
-    let insertError = null
-    let insertedData = null
-
-    while (retries > 0) {
-      try {
-        const result = await supabase
+    const insertedData = await withRetry(
+      async () => {
+        const { data, error } = await supabase
           .from('members')
           .insert([body])
           .select()
           .single()
         
-        insertedData = result.data
-        insertError = result.error
-        
-        if (!insertError) break
-        
+        if (error) throw error
+        return data
+      },
+      3,
+      500,
+      (error: any) => {
         // If it's a unique constraint, don't retry
-        if (insertError.message?.includes('unique') || insertError.message?.includes('duplicate')) {
-          throw new Error('Duplicate entry - member already exists')
-        }
-        
-        retries--
-        if (retries > 0) {
-          await new Promise(resolve => setTimeout(resolve, 500))
-        }
-      } catch (e: any) {
-        insertError = e
-        // If it's a unique constraint, don't retry
-        if (e.message?.includes('unique') || e.message?.includes('duplicate')) {
-          throw e
-        }
-        retries--
-        if (retries > 0) {
-          await new Promise(resolve => setTimeout(resolve, 500))
-        }
+        return !(error.message?.includes('unique') || error.message?.includes('duplicate'))
       }
-    }
-    
-    if (insertError) {
-      console.error('Supabase Insert Error:', insertError)
-      return NextResponse.json(
-        { success: false, error: insertError.message || 'Failed to create member in database' },
-        { status: 400 }
-      )
-    }
+    )
 
     return NextResponse.json(
       { success: true, message: 'Member created successfully', data: insertedData },
@@ -117,24 +91,31 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
 
-    let query = supabase.from('members').select('*')
-    
-    if (search) {
-      query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
-    }
+    const cacheKey = `members:${search || 'all'}`
 
-    const { data, error } = await query.order('created_at', { ascending: false })
+    const result = await withApiCache(cacheKey, 5_000, async () => {
+      let query = supabase.from('members').select('*')
+      
+      if (search) {
+        query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
+      }
 
-    if (error) {
-      console.error('Fetch members error:', error)
-      throw error
-    }
+      const { data, error } = await query.order('created_at', { ascending: false })
 
-    return NextResponse.json({
-      success: true,
-      data: data || [],
-      count: data?.length || 0,
+      if (error) {
+        console.error('Fetch members error:', error)
+        throw error
+      }
+
+      return { data: data || [], count: data?.length || 0 }
     })
+
+    const response = NextResponse.json({
+      success: true,
+      ...result,
+    })
+    response.headers.set('Cache-Control', 'public, max-age=5, s-maxage=10, stale-while-revalidate=30')
+    return response
   } catch (error: any) {
     console.error('GET /members error:', error)
     return NextResponse.json(

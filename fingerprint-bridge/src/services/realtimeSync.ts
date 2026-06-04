@@ -3,8 +3,6 @@ import { isValidDeviceLog, sanitizeEnrollNumber } from '../utils/attendanceLog'
 import { markLogsSyncedByKey, saveLogsLocally } from '../storage/localStore'
 import { pushLogsToApi } from './syncService'
 
-let listenerStarted = false
-
 export function extractEnrollNumber(log: {
   deviceUserId?: string | number
   userSn?: string | number
@@ -66,10 +64,3 @@ export async function handleRealtimeScan(log: {
   }
 }
 
-export function markRealtimeListenerStarted() {
-  listenerStarted = true
-}
-
-export function isRealtimeListenerStarted() {
-  return listenerStarted
-}

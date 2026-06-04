@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Clock, Calendar, Activity, Plus } from 'lucide-react'
 import { ManualAttendanceModal } from '@/components/attendance/ManualAttendanceModal'
+import { useAttendanceRealtime } from '@/hooks/useAttendanceRealtime'
 
 export default function AttendancePage() {
   const [records, setRecords] = useState<any[]>([])
@@ -16,7 +17,8 @@ export default function AttendancePage() {
   const fetchAttendance = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/attendance?date=${date}`)
+      // Add cache buster (&t=timestamp) to force fresh data
+      const res = await fetch(`/api/attendance?date=${date}&t=${Date.now()}`)
       const data = await res.json()
       if (data.success) {
         setRecords(data.data)
@@ -28,12 +30,48 @@ export default function AttendancePage() {
     }
   }, [date])
 
-  useEffect(() => {
-    fetchAttendance()
-  }, [fetchAttendance])
+  // Handle new attendance record from realtime subscription
+  const handleNewRecord = useCallback((newRecord: any) => {
+    setRecords((prev) => {
+      // Avoid duplicates: check if record already exists
+      const exists = prev.some((r) => r.id === newRecord.id)
+      if (exists) {
+        console.log('[UI] Record already exists, skipping duplicate')
+        return prev
+      }
+
+      // Add new record to top of list
+      const updated = [newRecord, ...prev]
+
+      // Sort by scan_time descending (newest first)
+      return updated.sort(
+        (a, b) =>
+          new Date(b.scan_time).getTime() - new Date(a.scan_time).getTime()
+      )
+    })
+
+    // Log for debugging
+    console.log('✅ [UI] New attendance added:', newRecord.members?.name)
+  }, [])
+
+  // Subscribe to real-time attendance updates
+  useAttendanceRealtime(date, handleNewRecord)
 
   const todayStr = new Date().toISOString().split('T')[0]
   const isToday = date === todayStr
+
+  useEffect(() => {
+    fetchAttendance()
+    
+    // Use polling as fallback (in case realtime disconnects)
+    // Reduced frequency since realtime handles most updates
+    let interval: NodeJS.Timeout
+    if (isToday) {
+      interval = setInterval(fetchAttendance, 5000) // Increased from 1s to 5s (fallback)
+    }
+    
+    return () => clearInterval(interval)
+  }, [fetchAttendance, isToday])
 
   return (
     <div className="relative min-h-screen bg-slate-50 overflow-hidden">

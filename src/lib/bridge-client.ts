@@ -1,9 +1,9 @@
 const BRIDGE_URL = process.env.FINGERPRINT_BRIDGE_URL || 'http://localhost:5050'
-const BRIDGE_TIMEOUT = 8000 // 8 second timeout
+const BRIDGE_TIMEOUT = 12000 // 12 second default timeout
 const MAX_RETRIES = 2
 const RETRY_DELAY = 1000 // 1 second between retries
 
-type BridgeFetchOptions = RequestInit & { maxRetries?: number }
+type BridgeFetchOptions = RequestInit & { maxRetries?: number; timeoutMs?: number }
 
 async function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -11,12 +11,15 @@ async function sleep(ms: number) {
 
 async function bridgeFetch<T>(path: string, init?: BridgeFetchOptions): Promise<T> {
   const maxRetries = init?.maxRetries ?? MAX_RETRIES
+  const timeoutMs = init?.timeoutMs ?? BRIDGE_TIMEOUT
   let lastError: Error | null = null
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), BRIDGE_TIMEOUT)
+      timeoutId = setTimeout(() => controller.abort(), timeoutMs)
       
       const response = await fetch(`${BRIDGE_URL}${path}`, {
         ...init,
@@ -28,7 +31,9 @@ async function bridgeFetch<T>(path: string, init?: BridgeFetchOptions): Promise<
         cache: 'no-store',
       })
       
-      clearTimeout(timeoutId)
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
       
       const payload = await response.json()
       if (!response.ok || payload.success === false) {
@@ -37,11 +42,18 @@ async function bridgeFetch<T>(path: string, init?: BridgeFetchOptions): Promise<
       
       return payload as T
     } catch (error: any) {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
       lastError = error
+      
+      if (error?.name === 'AbortError') {
+        lastError = new Error('Fingerprint bridge request timed out')
+      }
       
       // Don't retry on client errors (4xx)
       if (error?.status >= 400 && error?.status < 500) {
-        throw error
+        throw lastError
       }
       
       // Retry on network errors, timeouts, or 5xx
@@ -70,6 +82,7 @@ export function registerDeviceUser(userId: string, name: string) {
     method: 'POST',
     body: JSON.stringify({ userId, name }),
     maxRetries: 2,
+    timeoutMs: 15000,
   })
 }
 
@@ -78,6 +91,7 @@ export function startDeviceEnrollment(userId: string, name: string, fingerIndex 
     method: 'POST',
     body: JSON.stringify({ userId, name, fingerIndex }),
     maxRetries: 2,
+    timeoutMs: 15000,
   })
 }
 

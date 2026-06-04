@@ -9,9 +9,18 @@
     "build": "next build",
     "build:bridge": "npm --prefix fingerprint-bridge run build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node tests/run-tests.js",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:report": "playwright show-report",
+    "test:load": "k6 run tests/load/api-load-test.js",
+    "lighthouse": "lhci autorun",
+    "sonar": "sonar-scanner"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.56.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.1",
     "class-variance-authority": "^0.7.0",
@@ -27,6 +36,8 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
+    "@lhci/cli": "^0.15.1",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^20.0.0",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",

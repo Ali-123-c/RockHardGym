@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { writeFile, readFile } from 'fs/promises'
+import { join } from 'path'
 
 const DEFAULT_DEVICE = {
   device_name: 'ZKTeco K70',
@@ -13,6 +15,55 @@ const DEFAULT_DEVICE = {
 function toInteger(value: unknown, fallback: number) {
   const parsed = Number(value)
   return Number.isInteger(parsed) ? parsed : fallback
+}
+
+async function updateFingerprintBridgeEnv(ipAddress: string, port: number) {
+  // Only attempt filesystem writes in non-serverless environments
+  // Vercel serverless functions cannot write to the filesystem
+  if (process.env.VERCEL || process.env.NEXT_PUBLIC_VERCEL_ENV === 'production') {
+    console.log('Skipping fingerprint-bridge/.env update (serverless environment)')
+    return
+  }
+
+  try {
+    const envPath = join(process.cwd(), 'fingerprint-bridge', '.env')
+    
+    // Try to read existing .env file
+    let envContent = ''
+    try {
+      envContent = await readFile(envPath, 'utf-8')
+    } catch {
+      // File doesn't exist yet, create new content
+      envContent = ''
+    }
+
+    // Parse existing env vars
+    const envVars = new Map<string, string>()
+    envContent.split('\n').forEach((line) => {
+      const trimmed = line.trim()
+      if (trimmed && !trimmed.startsWith('#')) {
+        const [key, ...valueParts] = trimmed.split('=')
+        if (key) envVars.set(key.trim(), valueParts.join('=').trim())
+      }
+    })
+
+    // Update or add IP and port
+    envVars.set('DEVICE_IP', ipAddress)
+    envVars.set('DEVICE_PORT', String(port))
+
+    // Rebuild env file
+    const newEnvContent = Array.from(envVars.entries())
+      .map(([key, value]) => `${key}=${value}`)
+      .join('\n')
+      .trim() + '\n'
+
+    // Write back to file
+    await writeFile(envPath, newEnvContent, 'utf-8')
+    console.log(`Updated fingerprint-bridge/.env with DEVICE_IP=${ipAddress} DEVICE_PORT=${port}`)
+  } catch (error: any) {
+    console.warn('Could not update fingerprint-bridge/.env:', error.message)
+    // Don't fail the entire request if env update fails
+  }
 }
 
 export async function GET() {
@@ -96,9 +147,12 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error
 
+    // Update fingerprint-bridge/.env with new IP and port (only in local environment)
+    await updateFingerprintBridgeEnv(ipAddress, port)
+
     return NextResponse.json({
       success: true,
-      message: 'Device settings saved',
+      message: 'Device settings saved and fingerprint-bridge config updated',
       device: data,
     })
   } catch (error: any) {

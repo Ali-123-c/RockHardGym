@@ -12,10 +12,9 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
 
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "noEmit": true,
-    "ignoreDeprecations": "6.0",
     "jsx": "preserve",
     "strict": true,
     "noUnusedLocals": true,
@@ -35,7 +34,8 @@
         "name": "next"
       }
     ],
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "ignoreDeprecations": "6.0"
   },
   "include": [
     "next-env.d.ts",
@@ -43,6 +43,7 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    ".next"
   ]
 }

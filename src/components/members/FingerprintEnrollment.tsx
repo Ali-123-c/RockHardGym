@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Fingerprint, Loader2, RefreshCw, Scan, UserPlus } from 'lucide-react'
+import { Fingerprint, Loader2, RefreshCw, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Props {
@@ -118,15 +118,6 @@ export function FingerprintEnrollment({ memberId, membershipNo }: Props) {
         >
           {busy === 'register' ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
           Register on device
-        </button>
-        <button
-          type="button"
-          disabled={Boolean(busy)}
-          onClick={() => runAction('start-enroll', 'Enrollment started')}
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {busy === 'start-enroll' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scan className="h-4 w-4" />}
-          Start fingerprint enroll
         </button>
         <button
           type="button"

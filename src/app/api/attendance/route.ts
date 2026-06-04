@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { withRetry } from '@/lib/withRetry'
 
 // POST /api/attendance - Mark attendance (from fingerprint or manual)
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    // client_timezone: e.g. "Asia/Karachi", local_date: e.g. "2026-05-24"
     const { member_id, scan_time, client_timezone, local_date, idempotency_key } = body
 
     if (!member_id) {
@@ -16,125 +16,58 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if member exists with retries for transient failures
-    let member = null
-    let memberError = null
-    let retries = 3
-    
-    while (retries > 0) {
-      try {
-        const result = await supabase
-          .from('members')
-          .select('id, name, status, membership_no, joining_date, exemption_month')
-          .eq('id', member_id)
-          .single()
-        
-        member = result.data
-        memberError = result.error
-        
-        if (!memberError) break
-        retries--
-        if (retries > 0) {
-          await new Promise(resolve => setTimeout(resolve, 500))
-        }
-      } catch (e) {
-        retries--
-        if (retries > 0) {
-          await new Promise(resolve => setTimeout(resolve, 500))
-        }
-      }
-    }
+    const member = await withRetry(async () => {
+      const { data, error } = await supabase
+        .from('members')
+        .select('id, name, status, membership_no')
+        .eq('id', member_id)
+        .single()
+      
+      if (error) throw error
+      return data
+    })
 
-    if (memberError || !member) {
-      console.error(`Member ${member_id} not found after retries`)
+    if (!member) {
       return NextResponse.json(
         { success: false, error: 'Member not found' },
         { status: 404 }
       )
     }
 
-    // Compute the UTC ISO timestamp for scan_time
+    if (member.status === 'Inactive') {
+       return NextResponse.json(
+         { success: false, error: 'requires_admin_review', message: 'Member is currently inactive.' },
+         { status: 403 }
+       )
+    }
+
     const scanTimeISO = scan_time
       ? new Date(scan_time * 1000).toISOString()
       : new Date().toISOString()
 
-    // Use client-supplied local date to avoid UTC date mismatch for non-UTC timezones.
-    // Fall back to deriving it from scan_time if not provided.
     let attendanceDate: string
     if (local_date) {
       attendanceDate = local_date
     } else if (client_timezone) {
       attendanceDate = new Date().toLocaleDateString('en-CA', { timeZone: client_timezone })
     } else {
-      // Last resort: UTC date (may be off by a day for UTC+ zones late at night)
       attendanceDate = new Date().toISOString().split('T')[0]
     }
 
-    // --- 10-Day Absence Check ---
-    const now = new Date()
-    const currentYear = now.getFullYear()
-    const currentMonth = now.getMonth() // 0-11
-    const currentMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`
-
-    if (member.exemption_month !== currentMonthStr && member.status !== 'Inactive') {
-      const start = new Date(currentYear, currentMonth, 1)
-      if (member.joining_date) {
-        const joinDate = new Date(member.joining_date)
-        if (joinDate.getFullYear() === currentYear && joinDate.getMonth() === currentMonth) {
-          start.setDate(Math.max(1, joinDate.getDate()))
-        }
-      }
-
-      let workingDaysBeforeToday = 0
-      const current = new Date(start)
-      const todayStart = new Date(currentYear, currentMonth, now.getDate())
-      
-      while (current < todayStart) {
-        if (current.getDay() !== 0) { // 0 is Sunday
-          workingDaysBeforeToday++
-        }
-        current.setDate(current.getDate() + 1)
-      }
-
-      const { data: currentMonthAttendance } = await supabase
-        .from('attendance')
-        .select('date')
-        .eq('member_id', member_id)
-        .like('date', `${currentMonthStr}-%`)
-
-      const todayStr = now.toLocaleDateString('en-CA')
-      const pastAttendance = (currentMonthAttendance || []).filter(a => a.date !== todayStr)
-      const uniqueDaysPresentBeforeToday = new Set(pastAttendance.map(a => a.date)).size
-      
-      const daysAbsentBeforeToday = Math.max(0, workingDaysBeforeToday - uniqueDaysPresentBeforeToday)
-      
-      if (daysAbsentBeforeToday >= 10) {
-        // Automatically mark as Inactive and notify admin
-        await supabase.from('members').update({ status: 'Inactive' }).eq('id', member_id)
-        
-        console.warn(`Member ${member_id} marked inactive due to 10-day absence`)
-        return NextResponse.json(
-          { success: false, error: 'requires_admin_review', message: 'Member has been absent for 10 days. Status set to Inactive. Admin review required.' },
-          { status: 403 }
-        )
-      }
-    } else if (member.status === 'Inactive') {
-       return NextResponse.json(
-         { success: false, error: 'requires_admin_review', message: 'Member is currently inactive due to absence.' },
-         { status: 403 }
-       )
-    }
-    // ----------------------------
-
     // Check if already marked for today
-    const { data: existingAttendance } = await supabase
-      .from('attendance')
-      .select('id')
-      .eq('member_id', member_id)
-      .eq('date', attendanceDate)
-      .single()
+    const existingAttendance = await withRetry(async () => {
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('id')
+        .eq('member_id', member_id)
+        .eq('date', attendanceDate)
+        .maybeSingle()
+      
+      if (error && error.code !== 'PGRST116') throw error
+      return data
+    })
 
     if (existingAttendance) {
-      // Return success if using idempotency_key (idempotent operation)
       if (idempotency_key) {
         return NextResponse.json(
           { success: true, message: 'Attendance already marked for today (idempotent)', data: existingAttendance, member, idempotent: true },
@@ -148,50 +81,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert attendance record with retry logic
-    let insertError = null
-    let insertedData = null
-    retries = 2
-    
-    while (retries > 0) {
-      try {
-        const result = await supabase
-          .from('attendance')
-          .insert([
-            {
-              member_id,
-              scan_time: scanTimeISO,
-              date: attendanceDate,
-            }
-          ])
-          .select()
-          .single()
-        
-        insertedData = result.data
-        insertError = result.error
-        
-        if (!insertError) break
-        retries--
-        if (retries > 0) {
-          await new Promise(resolve => setTimeout(resolve, 500))
-        }
-      } catch (e: any) {
-        insertError = e
-        retries--
-        if (retries > 0) {
-          await new Promise(resolve => setTimeout(resolve, 500))
-        }
-      }
-    }
+    const insertedData = await withRetry(async () => {
+      const { data, error } = await supabase
+        .from('attendance')
+        .insert([{ member_id, scan_time: scanTimeISO, date: attendanceDate }])
+        .select()
+        .single()
+      
+      if (error) throw error
+      return data
+    })
 
-    if (insertError) {
-      console.error(`Failed to insert attendance for member ${member_id}:`, insertError)
-      throw insertError
-    }
-
-    return NextResponse.json(
+    const response = NextResponse.json(
       { success: true, message: 'Attendance marked successfully', data: insertedData, member },
       { status: 201 }
     )
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
+    return response
   } catch (error: any) {
     console.error('POST /attendance error:', error)
     return NextResponse.json(
@@ -236,11 +144,14 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: data || [],
       count: data?.length || 0,
     })
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+    response.headers.set('Pragma', 'no-cache')
+    return response
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to fetch attendance' },

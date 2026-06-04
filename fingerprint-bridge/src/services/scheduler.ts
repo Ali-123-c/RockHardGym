@@ -16,16 +16,23 @@ export function startScheduler() {
   
   logger.info(`Starting cron scheduler with expression: '${cronExpression}' (Every ${config.sync.intervalMinutes} minutes)`)
 
+  // Helper to run sync with error catching so failures don't crash the bridge
+  const safeSync = () => {
+    runSyncJob().catch((error) => {
+      logger.error('Scheduled sync failed (caught):', error)
+    })
+  }
+
   // Initial run on startup
-  runSyncJob()
+  safeSync()
 
   cron.schedule(cronExpression, () => {
     logger.info('--- Scheduled Sync Triggered ---')
-    runSyncJob()
+    safeSync()
   })
 
   setInterval(() => {
     logger.info('--- Retry Sync Triggered ---')
-    runSyncJob()
+    safeSync()
   }, config.sync.retryIntervalMs)
 }

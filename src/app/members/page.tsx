@@ -54,10 +54,19 @@ export default function MembersPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this member?')) return
     try {
-      await fetch(`/api/members/${id}`, { method: 'DELETE' })
-      fetchMembers()
+      const res = await fetch(`/api/members/${id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (data.success) {
+        // Remove from local state immediately for instant feedback
+        setMembers((prev) => prev.filter((m) => m.id !== id))
+        // Then refetch from server to sync counts and ensure consistency
+        fetchMembers()
+      } else {
+        alert(data.error || 'Failed to delete member')
+      }
     } catch (error) {
       console.error('Error deleting member', error)
+      alert('Network error — could not delete member')
     }
   }
 

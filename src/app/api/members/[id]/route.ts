@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { invalidateApiCache } from '@/lib/api-cache'
 
 // GET /api/members/[id] - Get member by ID
 export async function GET(
@@ -103,6 +104,9 @@ export async function PUT(
     }
     
     if (error) throw error
+
+    // Invalidate member list cache so the UI picks up the change immediately
+    invalidateApiCache('members:')
     
     return NextResponse.json({
       success: true,
@@ -161,6 +165,9 @@ export async function DELETE(
     }
     
     if (error) throw error
+
+    // Invalidate member list cache so the UI picks up the deletion immediately
+    invalidateApiCache('members:')
     
     return NextResponse.json({
       success: true,

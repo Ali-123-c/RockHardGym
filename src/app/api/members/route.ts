@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { withRetry } from '@/lib/withRetry'
-import { withApiCache } from '@/lib/api-cache'
+import { withApiCache, invalidateApiCache } from '@/lib/api-cache'
 
 // POST /api/members - Create a new member
 export async function POST(request: NextRequest) {
@@ -62,6 +62,9 @@ export async function POST(request: NextRequest) {
         return !(error.message?.includes('unique') || error.message?.includes('duplicate'))
       }
     )
+
+    // Invalidate member list cache so the UI picks up the new member immediately
+    invalidateApiCache('members:')
 
     return NextResponse.json(
       { success: true, message: 'Member created successfully', data: insertedData },

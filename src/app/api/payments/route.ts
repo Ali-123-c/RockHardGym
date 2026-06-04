@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { withRetry } from '@/lib/withRetry'
-import { withApiCache } from '@/lib/api-cache'
+import { withApiCache, invalidateApiCache } from '@/lib/api-cache'
 
 // POST /api/payments - Record a payment
 export async function POST(request: NextRequest) {
@@ -45,6 +45,10 @@ export async function POST(request: NextRequest) {
     if (memberError) {
       console.error('Failed to update member status to Active:', memberError)
     }
+
+    // Invalidate payment + member caches so the UI reflects the new payment and status change
+    invalidateApiCache('payments:')
+    invalidateApiCache('members:')
 
     return NextResponse.json(
       { success: true, message: 'Payment recorded successfully', data: paymentData },

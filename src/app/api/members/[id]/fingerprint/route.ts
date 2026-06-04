@@ -88,11 +88,17 @@ export async function POST(
         return NextResponse.json({ success: true, device: deviceCheck })
       } catch (error: any) {
         console.warn(`Device check failed for ${userId}:`, error.message)
+        // Return 200 with offline status (same as GET handler) instead of 503
+        // so the frontend doesn't trigger error boundaries for a routine offline state
         return NextResponse.json({
-          success: false,
-          error: 'Device check failed - bridge may be offline',
-          bridgeStatus: 'offline',
-        }, { status: 503 })
+          success: true,
+          device: {
+            success: false,
+            onDevice: null,
+            bridgeStatus: 'offline',
+            message: 'Fingerprint bridge temporarily unavailable',
+          },
+        }, { status: 200 })
       }
     }
 

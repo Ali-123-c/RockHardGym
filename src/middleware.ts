@@ -53,12 +53,27 @@ export async function middleware(request: NextRequest) {
       }
     )
 
-    // Use getSession() instead of getUser() to avoid a network round-trip to Supabase
-    // on every request. The JWT is decoded locally from the cookie (~1ms vs 1-1.5s).
+    // Two-step auth verification for security:
+    // 1. getSession() — quick local check from cookies (~1ms)
+    // 2. If session exists, verify authenticity with getUser() — network round-trip
+    //    This prevents using a forged JWT from the cookie storage.
     const {
       data: { session },
     } = await supabase.auth.getSession()
-    user = session?.user ?? null
+
+    if (session) {
+      // Verify session authenticity with the Supabase Auth server.
+      // If getUser() fails (network blip), fall back to session data rather
+      // than blocking the user — security is still better than with just getSession().
+      try {
+        const {
+          data: { user: verifiedUser },
+        } = await supabase.auth.getUser()
+        user = verifiedUser
+      } catch {
+        user = session.user
+      }
+    }
   } catch (error) {
     console.error('[Middleware] Auth check failed, allowing request:', error)
     // If auth fails (e.g., network error on first load), still redirect to login

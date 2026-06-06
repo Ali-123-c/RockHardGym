@@ -367,16 +367,20 @@ export class ZKDevice {
   }
 
   /** Puts device in fingerprint enrollment mode for the given user PIN. */
-  async startFingerprintEnrollment(userId: string, fingerIndex = 0) {
+  async startFingerprintEnrollment(userId: string, fingerIndex = 0, uid?: number) {
     if (!this.isConnected) {
       const connected = await this.connect()
       if (!connected) throw new Error('Device is offline')
     }
 
-    // Use a deterministic UID derived from userId so each membership_no
-    // always maps to the same UID, even when getUsers() is unavailable.
-    const targetUid = parseInt(userId, 10)
-    const uid = !Number.isNaN(targetUid) && targetUid > 0 ? targetUid : hashUserIdToUid(userId)
+    // Use the provided UID if available (from upsertUser), otherwise fall back
+    // to a deterministic hash. This ensures the enrollment targets the EXACT
+    // same device user record that was created by upsertUser(), rather than
+    // independently calculating a different UID and creating a phantom user.
+    if (uid === undefined || uid === null) {
+      const targetUid = parseInt(userId, 10)
+      uid = !Number.isNaN(targetUid) && targetUid > 0 ? targetUid : hashUserIdToUid(userId)
+    }
     const buffer = Buffer.alloc(4)
     buffer.writeUInt32LE(uid, 0)
 

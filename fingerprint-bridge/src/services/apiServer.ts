@@ -189,10 +189,17 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
         sendJson(response, 400, { success: false, error: 'userId is required' })
         return
       }
+
+      // Track the actual UID assigned by upsertUser so startFingerprintEnrollment
+      // targets the EXACT same device record — not a different UID calculated
+      // independently (which creates a phantom user on some ZKTeco models).
+      let actualUid: number | undefined
       if (name) {
-        await connectionManager.registerMemberOnDevice({ userId, name })
+        const result = await connectionManager.registerMemberOnDevice({ userId, name })
+        actualUid = result.user.uid
       }
-      const enroll = await connectionManager.startMemberEnrollment(userId, fingerIndex)
+
+      const enroll = await connectionManager.startMemberEnrollment(userId, fingerIndex, actualUid)
       sendJson(response, 200, {
         success: true,
         message: 'Device is ready — place the same finger 3 times on the scanner',

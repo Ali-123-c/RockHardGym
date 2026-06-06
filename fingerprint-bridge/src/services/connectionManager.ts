@@ -12,7 +12,7 @@ type BridgeDevice = {
   clearAttendanceLogs(): Promise<boolean>
   getUsers(): Promise<ZkDeviceUser[]>
   upsertUser(params: { userId: string; name: string; uid?: number }): Promise<{ created: boolean; user: ZkDeviceUser }>
-  startFingerprintEnrollment(userId: string, fingerIndex?: number): Promise<{ success: boolean; mode: string }>
+  startFingerprintEnrollment(userId: string, fingerIndex?: number, uid?: number): Promise<{ success: boolean; mode: string }>
   startRealtimeListener?(
     onScan: (log: { deviceUserId: string; userSn?: string; recordTime: Date }) => void
   ): void
@@ -178,9 +178,9 @@ class ConnectionManager {
     return user
   }
 
-  async startMemberEnrollment(userId: string, fingerIndex = 0) {
+  async startMemberEnrollment(userId: string, fingerIndex = 0, uid?: number) {
     await this.ensureConnected()
-    return this.device.startFingerprintEnrollment(userId, fingerIndex)
+    return this.device.startFingerprintEnrollment(userId, fingerIndex, uid)
   }
 
   async getAttendanceLogs() {

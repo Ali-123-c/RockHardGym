@@ -3,6 +3,7 @@
 export const FINGERPRINT_BRIDGE_API_PATHS = [
   '/api/fingerprint/sync',
   '/api/fingerprint/status',
+  '/api/device-settings/active',
 ] as const
 
 export function isFingerprintBridgeApiPath(pathname: string): boolean {

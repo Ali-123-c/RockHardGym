@@ -36,54 +36,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── 10-Day Absence Rule ────────────────────────────────────────────────
-    // Block attendance if the member has missed 10+ working days (Mon–Sat)
-    if (member.status === 'Active') {
-      const now = new Date()
-      const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-
-      if (member.exemption_month !== currentMonthStr) {
-        const { data: lastAttendance } = await supabase
-          .from('attendance')
-          .select('date')
-          .eq('member_id', member_id)
-          .order('date', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-
-        const startDate = lastAttendance?.date
-          ? new Date(lastAttendance.date + 'T00:00:00')
-          : new Date(member.joining_date + 'T00:00:00')
-
-        startDate.setDate(startDate.getDate() + 1)
-
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-
-        let workingDaysAbsent = 0
-        const cursor = new Date(startDate)
-        while (cursor < today) {
-          if (cursor.getDay() !== 0) {
-            workingDaysAbsent++
-          }
-          cursor.setDate(cursor.getDate() + 1)
-        }
-
-        if (workingDaysAbsent >= 10) {
-          return NextResponse.json({
-            success: false,
-            error: 'requires_admin_review',
-            message: `Member has been absent for ${workingDaysAbsent} working days. Admin review required.`,
-            absentDays: workingDaysAbsent,
-          }, { status: 403 })
-        }
-      }
-    } else if (member.status === 'Inactive') {
-       return NextResponse.json(
-         { success: false, error: 'requires_admin_review', message: 'Member is currently inactive.' },
-         { status: 403 }
-       )
-    }
-
     const scanTimeISO = scan_time
       ? new Date(scan_time * 1000).toISOString()
       : new Date().toISOString()

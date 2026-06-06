@@ -33,6 +33,22 @@ function getZkErrorMessage(error: unknown): string {
   }
 }
 
+/**
+ * Deterministic hash from a userId string to a UID in [1, 65535].
+ * Ensures the same userId always maps to the same UID on the device,
+ * even when getUsers() is unavailable (e.g. K50 / protocol errors).
+ */
+function hashUserIdToUid(userId: string): number {
+  let hash = 0
+  for (let i = 0; i < userId.length; i++) {
+    const char = userId.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash // force 32-bit signed integer
+  }
+  // Convert to unsigned 32-bit, then map to valid UID range [1, 65535]
+  return (hash >>> 0) % 65535 + 1
+}
+
 export interface ZkAttendance {
   userSn: string
   deviceUserId: string // enrollNumber
@@ -320,7 +336,7 @@ export class ZKDevice {
 
     // Assign a unique UID: max existing UID + 1 (first user gets uid 1)
     const maxUid = existingUsers.reduce((max, u) => Math.max(max, u.uid), 0)
-    const uid = params.uid ?? maxUid + 1
+    const uid = params.uid ?? (maxUid > 0 ? maxUid + 1 : hashUserIdToUid(userId))
   
     try {
       if (typeof this.zkInstance.setUser === 'function') {
@@ -357,15 +373,17 @@ export class ZKDevice {
       if (!connected) throw new Error('Device is offline')
     }
 
-    // Use userId directly as UID (K50 may not support getUsers)
-    const targetUid = parseInt(userId, 10) || 1
+    // Use a deterministic UID derived from userId so each membership_no
+    // always maps to the same UID, even when getUsers() is unavailable.
+    const targetUid = parseInt(userId, 10)
+    const uid = !Number.isNaN(targetUid) && targetUid > 0 ? targetUid : hashUserIdToUid(userId)
     const buffer = Buffer.alloc(4)
-    buffer.writeUInt32LE(targetUid, 0)
+    buffer.writeUInt32LE(uid, 0)
 
     try {
       await this.zkInstance.executeCmd(CMD_STARTENROLL, buffer)
       logger.info(
-        `Started fingerprint enrollment for user ${userId} (resolved uid ${targetUid}) finger ${fingerIndex}`
+        `Started fingerprint enrollment for user ${userId} (resolved uid ${uid}) finger ${fingerIndex}`
       )
       return { success: true, mode: 'start_enroll' as const }
     } catch (error) {

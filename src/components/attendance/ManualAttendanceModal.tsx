@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Search, UserCheck, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { X, Search, UserCheck, Loader2, CheckCircle2 } from 'lucide-react'
 
 export function ManualAttendanceModal({ onClose, onSuccess, alreadyMarkedIds }: { onClose: () => void, onSuccess: () => void, alreadyMarkedIds?: Set<string> }) {
   const [members, setMembers] = useState<any[]>([])
@@ -10,8 +10,6 @@ export function ManualAttendanceModal({ onClose, onSuccess, alreadyMarkedIds }: 
   const [submitting, setSubmitting] = useState<string | null>(null)
   // Track members marked in this session so admin can see who's done
   const [markedIds, setMarkedIds] = useState<Set<string>>(alreadyMarkedIds || new Set())
-  const [reviewMember, setReviewMember] = useState<any>(null)
-
   useEffect(() => {
     const fetchMembers = async () => {
       try {
@@ -58,9 +56,6 @@ export function ManualAttendanceModal({ onClose, onSuccess, alreadyMarkedIds }: 
         // Mark as done in this session — keep modal open for more entries
         setMarkedIds(prev => new Set(prev).add(memberId))
         onSuccess() // refresh the attendance list in the background
-      } else if (data.error === 'requires_admin_review') {
-        const m = members.find(m => m.id === memberId)
-        setReviewMember(m)
       } else {
         alert(data.message || data.error || 'Failed to mark attendance')
       }
@@ -70,28 +65,6 @@ export function ManualAttendanceModal({ onClose, onSuccess, alreadyMarkedIds }: 
     } finally {
       setSubmitting(null)
     }
-  }
-
-  const handleKeepActive = async () => {
-    if (!reviewMember) return
-    try {
-      const res = await fetch(`/api/members/${reviewMember.id}/exempt`, { method: 'POST' })
-      if (res.ok) {
-        const exemptedMemberId = reviewMember.id
-        setReviewMember(null)
-        // Try marking attendance again automatically
-        handleMarkAttendance(exemptedMemberId)
-      } else {
-        alert('Failed to exempt member')
-      }
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  const handleMakeInactive = () => {
-    setMembers(prev => prev.filter(m => m.id !== reviewMember?.id))
-    setReviewMember(null)
   }
 
   const markedCount = markedIds.size
@@ -104,34 +77,6 @@ export function ManualAttendanceModal({ onClose, onSuccess, alreadyMarkedIds }: 
     >
       <div className="relative w-full max-w-lg max-h-[85vh] flex flex-col bg-slate-50 rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-scale-in">
         <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500" />
-
-        {/* Admin Review Overlay */}
-        {reviewMember && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-8 bg-white/95 backdrop-blur-md text-center animate-fade-in">
-            <div className="w-16 h-16 rounded-full bg-rose-50 flex items-center justify-center mb-6 border border-rose-200">
-              <AlertCircle className="w-8 h-8 text-rose-500" />
-            </div>
-            <h3 className="text-2xl font-black text-slate-900 mb-3">Review Required</h3>
-            <p className="text-slate-600 text-sm mb-8 max-w-sm leading-relaxed">
-              <strong className="text-slate-900">{reviewMember.name}</strong> has been absent for 10 or more days this month. 
-              Their status has automatically been set to <strong className="text-rose-500">Inactive</strong>.
-            </p>
-            <div className="flex gap-3 w-full max-w-xs">
-              <button 
-                onClick={handleMakeInactive}
-                className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition"
-              >
-                Keep Inactive
-              </button>
-              <button 
-                onClick={handleKeepActive}
-                className="flex-1 py-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-bold border border-emerald-500/30 transition shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_-5px_rgba(16,185,129,0.6)]"
-              >
-                Exempt & Active
-              </button>
-            </div>
-          </div>
-        )}
 
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 flex-shrink-0">
           <div>

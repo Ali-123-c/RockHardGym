@@ -384,16 +384,44 @@ export class ZKDevice {
     const buffer = Buffer.alloc(4)
     buffer.writeUInt32LE(uid, 0)
 
-    try {
-      await this.zkInstance.executeCmd(CMD_STARTENROLL, buffer)
-      logger.info(
-        `Started fingerprint enrollment for user ${userId} (resolved uid ${uid}) finger ${fingerIndex}`
-      )
-      return { success: true, mode: 'start_enroll' as const }
-    } catch (error) {
-      logger.warn('CMD_STARTENROLL failed, trying capture finger command', error)
-      await this.zkInstance.executeCmd(CMD_CAPTUREFINGER, buffer)
-      return { success: true, mode: 'capture_finger' as const }
+    // Many ZKTeco devices require TWO commands to activate the scanner:
+    //   1. CMD_STARTENROLL (61)  — puts device into "enroll this user" state
+    //   2. CMD_CAPTUREFINGER (1009) — triggers the physical scanner hardware
+    // The old code only tried CMD_CAPTUREFINGER if CMD_STARTENROLL threw,
+    // but CMD_STARTENROLL typically returns ACK without activating the scanner.
+    // We now ALWAYS attempt both commands in sequence.
+    const started = await this.execAndLog('START_ENROLL', CMD_STARTENROLL, buffer)
+
+    if (started) {
+      logger.info(`CMD_STARTENROLL ACK — device is in enroll state for ${userId}`)
+    } else {
+      logger.warn(`CMD_STARTENROLL returned non-ACK (device may not support this command)`)
     }
+
+    // Small delay to let the device process the first command before sending
+    // the hardware trigger. Some models are sensitive to command timing.
+    await new Promise((resolve) => setTimeout(resolve, 800))
+
+    // Send CMD_CAPTUREFINGER to trigger the scanner hardware.
+    // Even if CMD_STARTENROLL returned non-ACK, attempt this anyway — some
+    // models skip CMD_STARTENROLL entirely and respond only to this command.
+    const captured = await this.execAndLog('CAPTURE_FINGER', CMD_CAPTUREFINGER, buffer)
+
+    const mode = captured ? 'capture_finger' : 'start_enroll'
+    logger.info(
+      `Enrollment for user ${userId} (uid ${uid}): START=${started} CAPTURE=${captured} → mode=${mode}`
+    )
+
+    // If BOTH commands failed, the device likely doesn't support remote enrollment.
+    // Throw so the API caller returns a clear error instead of silently telling
+    // the user to scan when nothing will happen.
+    if (!started && !captured) {
+      throw new Error(
+        `Device did not respond to enrollment commands (UID ${uid}). ` +
+        `Try enrolling the fingerprint directly on the device's physical menu.`
+      )
+    }
+
+    return { success: true, mode: mode as 'start_enroll' | 'capture_finger' }
   }
 }

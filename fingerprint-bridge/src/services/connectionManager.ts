@@ -3,6 +3,7 @@ import { logger } from '../utils/logger'
 import { SimulatorDevice } from '../zkteco/simulator'
 import { ZKDevice, ZkAttendance, ZkDeviceUser } from '../zkteco/device'
 import { handleRealtimeScan } from './realtimeSync'
+import { syncConfigFromApi } from './configSync'
 
 type BridgeDevice = {
   connect(): Promise<boolean>
@@ -57,6 +58,17 @@ class ConnectionManager {
 
   async start() {
     logger.connection(`Starting connection manager for ${config.device.ip}:${config.device.port}`)
+
+    // Fetch the active device config from the GymFlow API first.
+    // This overrides the .env file with whatever the admin configured in the Web UI.
+    // If the API is unreachable, the bridge falls back to .env values gracefully.
+    const synced = await syncConfigFromApi()
+    if (synced.changed) {
+      logger.connection(`Config updated from API: ${synced.ip_address}:${synced.port}`)
+      // Recreate the device instance so it uses the updated config.device.ip/port
+      this.device = config.mode === 'simulator' ? new SimulatorDevice() : new ZKDevice()
+    }
+
     await this.connect()
   }
 
@@ -235,6 +247,14 @@ class ConnectionManager {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
+    }
+
+    // Before reconnecting, pull the latest device config from the GymFlow API.
+    // This ensures the bridge always uses the IP/port set in the Web UI,
+    // even if the .env file is stale or was never updated (e.g., on Vercel).
+    const synced = await syncConfigFromApi()
+    if (synced.changed) {
+      logger.connection(`Config refreshed from API: ${synced.ip_address}:${synced.port}`)
     }
 
     // Disconnect from the old device

@@ -1,15 +1,18 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, use } from 'react'
 import {
   CreditCard, Wallet, Receipt, History, AlertCircle, Plus, Search, Loader2
 } from 'lucide-react'
 import { PaymentModal } from '@/components/payments/PaymentModal'
 import { ReceiptModal } from '@/components/payments/ReceiptModal'
 
-export default function PaymentsPage() {
+export default function PaymentsPage({ searchParams }: { searchParams: Promise<{ member_id?: string }> }) {
+  const unwrappedParams = use(searchParams)
+  const urlMemberId = unwrappedParams?.member_id || ''
+
   const [mounted, setMounted] = useState(false)
-  const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending')
+  const [activeTab, setActiveTab] = useState<'pending' | 'history'>(urlMemberId ? 'pending' : 'pending')
   
   const [payments, setPayments] = useState<any[]>([])
   const [members, setMembers] = useState<any[]>([])
@@ -48,6 +51,14 @@ export default function PaymentsPage() {
   }, [fetchData])
 
   useEffect(() => { setMounted(true) }, [])
+
+  // Auto-open payment modal if URL has member_id
+  useEffect(() => {
+    if (urlMemberId && !loading) {
+      handleRecordPayment(urlMemberId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlMemberId, loading])
 
   // Calculate pending members
   // A member is pending if they are active, joined before or during the selected month, and haven't paid yet

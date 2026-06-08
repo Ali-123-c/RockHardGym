@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { withRetry } from '@/lib/withRetry'
 import { withApiCache, invalidateApiCache } from '@/lib/api-cache'
+import { getFeeStatus } from '@/lib/fee-utils'
 
 // POST /api/members - Create a new member
 export async function POST(request: NextRequest) {
@@ -90,14 +91,16 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET /api/members - Get all members with optional search
+// GET /api/members - Get all members with optional search and fee status
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
+    const includeFeeStatus = searchParams.get('includeFeeStatus') === 'true'
+    const feeFilter = searchParams.get('feeStatus') // 'paid' | 'pending' | 'upcoming'
 
     const supabase = getSupabase()
-    const cacheKey = `members:${search || 'all'}`
+    const cacheKey = `members:${search || 'all'}:${includeFeeStatus}:${feeFilter || 'all'}`
 
     const result = await withApiCache(cacheKey, 5_000, async () => {
       let query = supabase.from('members').select('*')
@@ -106,21 +109,51 @@ export async function GET(request: NextRequest) {
         query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
       }
 
-      const { data, error } = await query.order('created_at', { ascending: false })
+      const { data: members, error } = await query.order('created_at', { ascending: false })
 
       if (error) {
         console.error('Fetch members error:', error)
         throw error
       }
 
-      return { data: data || [], count: data?.length || 0 }
+      let resultData = members || []
+
+      // If fee status info is needed, calculate it
+      if (includeFeeStatus || feeFilter) {
+        const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+
+        // Get all payments for the current month
+        const { data: currentPayments } = await supabase
+          .from('payments')
+          .select('member_id')
+          .eq('month', currentMonth)
+          .eq('status', 'Paid')
+
+        const paidMemberIds = new Set<string>((currentPayments || []).map((p: any) => p.member_id))
+
+        // Attach feeStatus to each member using shared utility
+        resultData = resultData.map((member: any) => ({
+          ...member,
+          fee_status: getFeeStatus({
+            joiningDate: member.joining_date,
+            memberId: member.id,
+            paidMemberIds,
+          })
+        }))
+
+        // Apply fee status filter if specified
+        if (feeFilter) {
+          resultData = resultData.filter((m: any) => m.fee_status === feeFilter)
+        }
+      }
+
+      return { data: resultData, count: resultData.length }
     })
 
     const response = NextResponse.json({
       success: true,
       ...result,
     })
-    // No browser caching — ensures the UI always reflects the latest mutations
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
     return response
   } catch (error: any) {

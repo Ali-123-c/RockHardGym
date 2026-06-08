@@ -201,13 +201,23 @@ export default function Dashboard() {
 
           const paidMemberIds = new Set(payments.map(p => p.member_id))
           
+          // Fee due on same day-of-month as joining_date
           const pendingCount = activeMembers.filter((m: any) => {
             if (paidMemberIds.has(m.id)) return false
-            if (m.joining_date) {
-              const joinMonth = m.joining_date.substring(0, 7)
-              if (joinMonth > currentMonth) return false
+            if (!m.joining_date) return false
+            
+            const joinDate = new Date(m.joining_date)
+            const joinMonth = `${joinDate.getFullYear()}-${String(joinDate.getMonth() + 1).padStart(2, '0')}`
+            
+            if (joinMonth > currentMonth) return false
+            
+            if (joinMonth === currentMonth) {
+              return now.getDate() >= joinDate.getDate()
             }
-            return true
+            
+            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+            const dueDay = Math.min(joinDate.getDate(), daysInMonth)
+            return now.getDate() >= dueDay
           }).length
 
           const revenue = payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0)

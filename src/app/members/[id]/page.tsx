@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, use } from 'react'
-import { ArrowLeft, Clock, Activity, Calendar, Phone, MapPin, CreditCard, CheckCircle2, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Clock, Activity, Calendar, Phone, MapPin, CreditCard, CheckCircle2, AlertCircle, DollarSign } from 'lucide-react'
 import Link from 'next/link'
 import { FingerprintEnrollment } from '@/components/members/FingerprintEnrollment'
 
@@ -73,10 +73,33 @@ export default function MemberDetailsPage({ params }: { params: Promise<{ id: st
   const now = new Date()
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() // 0-11
-  const currentMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}` // e.g. "2026-05"
+  const currentMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}` // e.g. "2026-06"
 
-  // 1. Fee Status
+  // 1. Fee Status - using same logic as members API (due on same day-of-month as joining_date)
   const hasPaidThisMonth = payments.some(p => p.month === currentMonthStr && p.status === 'Paid')
+  
+  // Determine fee due day from joining_date
+  let feeDueDay: number | null = null
+  let feeStatusForDisplay: 'paid' | 'pending' | 'upcoming' = 'upcoming'
+  if (member.joining_date) {
+    const joinDate = new Date(member.joining_date)
+    feeDueDay = joinDate.getDate()
+    
+    if (hasPaidThisMonth) {
+      feeStatusForDisplay = 'paid'
+    } else {
+      const joinMonth = `${joinDate.getFullYear()}-${String(joinDate.getMonth() + 1).padStart(2, '0')}`
+      if (joinMonth <= currentMonthStr) {
+        if (joinMonth === currentMonthStr) {
+          feeStatusForDisplay = now.getDate() >= feeDueDay ? 'pending' : 'upcoming'
+        } else {
+          const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
+          const effectiveDueDay = Math.min(feeDueDay, daysInMonth)
+          feeStatusForDisplay = now.getDate() >= effectiveDueDay ? 'pending' : 'upcoming'
+        }
+      }
+    }
+  }
 
   // 2. Attendance Status
   // Calculate working days (excluding Sundays) from start of month (or join date) to today
@@ -196,31 +219,45 @@ export default function MemberDetailsPage({ params }: { params: Promise<{ id: st
           
           {/* Monthly Fee Card */}
           <div className="glass rounded-3xl border border-slate-200 p-6 relative overflow-hidden group hover:border-indigo-500/20 transition-colors">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-indigo-500" /> Current Month Fee
               </h3>
               <span className="text-sm font-medium text-slate-600">{now.toLocaleDateString('default', { month: 'long', year: 'numeric' })}</span>
             </div>
             
-            <div className="flex items-end justify-between">
+            <div className="flex items-end justify-between mb-4">
               <div>
                 <p className="text-sm text-slate-600 mb-1">Monthly Amount</p>
                 <p className="text-3xl font-black text-slate-900">Rs {member.fee_amount?.toLocaleString()}</p>
               </div>
               
-              {hasPaidThisMonth ? (
+              {feeStatusForDisplay === 'paid' ? (
                 <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-2 rounded-xl">
                   <CheckCircle2 className="w-5 h-5" />
-                  <span className="font-bold">Submitted</span>
+                  <span className="font-bold">Paid</span>
+                </div>
+              ) : feeStatusForDisplay === 'pending' ? (
+                <div className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-2 rounded-xl">
+                  <AlertCircle className="w-5 h-5 animate-pulse" />
+                  <span className="font-bold">Pending</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-2 rounded-xl">
-                  <AlertCircle className="w-5 h-5" />
-                  <span className="font-bold">Pending</span>
+                <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 px-4 py-2 rounded-xl">
+                  <Calendar className="w-5 h-5" />
+                  <span className="font-bold">Upcoming</span>
                 </div>
               )}
             </div>
+
+            {feeDueDay && (
+              <div className="pt-3 border-t border-slate-100">
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Fee due on the <strong className="text-slate-700">{feeDueDay}th</strong> of each month (based on join date: {new Date(member.joining_date).toLocaleDateString()})</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Attendance Stats Card */}
@@ -244,6 +281,48 @@ export default function MemberDetailsPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
 
+        </div>
+
+        {/* Fee History */}
+        <div className={`glass rounded-3xl border border-slate-200 p-8 mb-8 transition-all duration-500 delay-150 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 mb-6">
+            <DollarSign className="w-5 h-5 text-indigo-500" /> Fee Payment History
+          </h3>
+
+          {payments.length === 0 ? (
+            <p className="text-slate-600 text-center py-8">No payment records found.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-4 font-bold tracking-wider">Month</th>
+                    <th className="px-6 py-4 font-bold tracking-wider">Amount</th>
+                    <th className="px-6 py-4 font-bold tracking-wider">Payment Date</th>
+                    <th className="px-6 py-4 font-bold tracking-wider">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {payments.slice(0, 12).map((p) => {
+                    const [year, month] = p.month.split('-')
+                    const monthName = new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('default', { month: 'short', year: 'numeric' })
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-50 transition-colors group">
+                        <td className="px-6 py-4 text-slate-700 font-medium">{monthName}</td>
+                        <td className="px-6 py-4 font-bold text-slate-900">Rs {p.amount?.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-slate-500">{new Date(p.payment_date).toLocaleDateString()}</td>
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                            {p.status}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Recent Attendance History */}

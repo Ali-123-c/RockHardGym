@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, UserPlus, Edit2, Trash2, Clock, Phone, MapPin, Activity, Users, X, Eye } from 'lucide-react'
+import { Plus, Search, UserPlus, Edit2, Trash2, Clock, Phone, MapPin, Activity, Users, X, Eye, AlertCircle, CheckCircle2, DollarSign, Calendar } from 'lucide-react'
 import Link from 'next/link'
 import { MemberForm } from '@/components/members/MemberForm'
 
@@ -9,16 +9,25 @@ export default function MembersPage() {
   const [members, setMembers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [feeFilter, setFeeFilter] = useState<string>('all') // 'all' | 'pending' | 'paid' | 'upcoming'
   const [showForm, setShowForm] = useState(false)
   const [editingMember, setEditingMember] = useState<any>(null)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
 
+  const buildUrl = useCallback(() => {
+    const params = new URLSearchParams()
+    params.set('includeFeeStatus', 'true')
+    if (search) params.set('search', search)
+    if (feeFilter !== 'all') params.set('feeStatus', feeFilter)
+    return `/api/members?${params.toString()}`
+  }, [search, feeFilter])
+
   const fetchMembers = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/members${search ? `?search=${search}` : ''}`)
+      const res = await fetch(buildUrl())
       const data = await res.json()
       if (data.success) setMembers(data.data)
     } catch (error) {
@@ -26,7 +35,7 @@ export default function MembersPage() {
     } finally {
       setLoading(false)
     }
-  }, [search])
+  }, [buildUrl])
 
   useEffect(() => { fetchMembers() }, [fetchMembers])
 
@@ -57,9 +66,7 @@ export default function MembersPage() {
       const res = await fetch(`/api/members/${id}`, { method: 'DELETE' })
       const data = await res.json()
       if (data.success) {
-        // Remove from local state immediately for instant feedback
         setMembers((prev) => prev.filter((m) => m.id !== id))
-        // Then refetch from server to sync counts and ensure consistency
         fetchMembers()
       } else {
         alert(data.error || 'Failed to delete member')
@@ -72,6 +79,8 @@ export default function MembersPage() {
 
   const activeCount = members.filter(m => m.status === 'Active').length
   const expiredCount = members.length - activeCount
+  const pendingFeeCount = members.filter(m => m.fee_status === 'pending').length
+  const paidFeeCount = members.filter(m => m.fee_status === 'paid').length
 
   return (
     <div className="relative min-h-screen bg-slate-50 overflow-hidden">
@@ -113,7 +122,7 @@ export default function MembersPage() {
         </div>
 
         {/* ── Summary chips ── */}
-        <div className={`flex flex-wrap gap-3 mb-8 transition-all duration-500 delay-100 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+        <div className={`flex flex-wrap gap-3 mb-6 transition-all duration-500 delay-100 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <div className="flex items-center gap-2 px-4 py-2 rounded-full glass border border-slate-200">
             <Users className="w-4 h-4 text-slate-500" />
             <span className="text-sm font-semibold text-slate-700">{members.length} Total</span>
@@ -125,6 +134,38 @@ export default function MembersPage() {
           <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-rose-500/10 border border-rose-500/20">
             <span className="w-2 h-2 rounded-full bg-rose-400" />
             <span className="text-sm font-semibold text-rose-400">{expiredCount} Expired</span>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20">
+            <AlertCircle className="w-4 h-4 text-amber-400" />
+            <span className="text-sm font-semibold text-amber-400">{pendingFeeCount} Fees Pending</span>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span className="text-sm font-semibold text-emerald-400">{paidFeeCount} Fees Paid</span>
+          </div>
+        </div>
+
+        {/* ── Fee Status Filter Tabs ── */}
+        <div className={`mb-6 transition-all duration-500 delay-125 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { key: 'all', label: 'All', color: 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200' },
+              { key: 'pending', label: 'Pending Fees', color: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' },
+              { key: 'paid', label: 'Paid', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' },
+              { key: 'upcoming', label: 'Upcoming', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setFeeFilter(tab.key)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all duration-200 ${
+                  feeFilter === tab.key
+                    ? tab.color + ' ring-2 ring-offset-1 ring-slate-300'
+                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -253,6 +294,31 @@ export default function MembersPage() {
                     </div>
                   </div>
 
+                  {/* Fee Status Badge */}
+                  {isActive && member.fee_status && (
+                    <div className="mb-3">
+                      {member.fee_status === 'pending' ? (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20">
+                          <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 animate-pulse" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-rose-400 uppercase tracking-wider">Fee Pending</p>
+                            <p className="text-[10px] text-rose-300/70">Due on {new Date(member.joining_date).getDate()}th of month</p>
+                          </div>
+                        </div>
+                      ) : member.fee_status === 'paid' ? (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                          <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Fee Paid ✓</p>
+                        </div>
+                      ) : member.fee_status === 'upcoming' ? (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                          <Calendar className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                          <p className="text-xs font-bold text-blue-400 uppercase tracking-wider">Fee Upcoming</p>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+
                   {/* Details */}
                   <div className="space-y-2.5 flex-1 mb-5">
                     <div className="flex items-center gap-3 text-sm text-slate-600">
@@ -284,13 +350,24 @@ export default function MembersPage() {
                       <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-0.5">Monthly Fee</p>
                       <p className="text-lg font-black text-slate-900">Rs {member.fee_amount?.toLocaleString()}</p>
                     </div>
-                    <span className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-widest border ${
-                      isActive
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_12px_-3px_rgba(52,211,153,0.3)]'
-                        : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                    }`}>
-                      {member.status}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {member.fee_status === 'pending' && member.status === 'Active' && (
+                        <Link
+                          href={`/payments?member_id=${member.id}`}
+                          className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500 hover:text-white font-bold transition text-[10px] uppercase tracking-wider"
+                          title="Collect Payment"
+                        >
+                          <DollarSign className="w-3 h-3" />
+                        </Link>
+                      )}
+                      <span className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-widest border ${
+                        isActive
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_12px_-3px_rgba(52,211,153,0.3)]'
+                          : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                      }`}>
+                        {member.status}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )

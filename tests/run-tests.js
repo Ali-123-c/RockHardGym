@@ -5,11 +5,11 @@ let testMemberId = null
 
 const runTests = async () => {
   console.log('--- Starting Automated Integration Tests ---')
+  console.log('Testing the current flow: member creation → attendance → payments\n')
 
   try {
-    // 1. Create a Test Member
+    // ── 1. Create a Test Member ──────────────────────────────────────
     console.log('1. Testing Member Creation...')
-    // We set the joining date to 15 days ago to trigger the 10-day absence rule
     const joiningDate = new Date()
     joiningDate.setDate(joiningDate.getDate() - 15)
     
@@ -30,8 +30,8 @@ const runTests = async () => {
     testMemberId = memberData.data.id
     console.log('   ✅ Member created successfully: ' + testMemberId)
 
-    // 2. Test 10-Day Absence Blocking
-    console.log('\n2. Testing 10-Day Absence Rule...')
+    // ── 2. Mark Attendance (no 10-day restriction) ───────────────────
+    console.log('\n2. Testing Attendance Marking...')
     const localDate = new Date().toLocaleDateString('en-CA')
     const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
@@ -45,35 +45,62 @@ const runTests = async () => {
       })
     })
     const attendanceData = await attendanceRes.json()
-    assert.strictEqual(attendanceData.success, false, 'Attendance should be blocked')
-    assert.strictEqual(attendanceData.error, 'requires_admin_review', 'Should require admin review')
-    console.log('   ✅ Attendance correctly blocked for 10-day absence')
+    assert.strictEqual(attendanceRes.status, 201, 'Attendance should return 201')
+    assert.strictEqual(attendanceData.success, true, 'Attendance should succeed')
+    console.log('   ✅ Attendance marked successfully')
 
-    // 3. Test Admin Exemption
-    console.log('\n3. Testing Admin Exemption Flow...')
-    const exemptRes = await fetch(`${API_URL}/members/${testMemberId}/exempt`, {
-      method: 'POST'
-    })
-    const exemptData = await exemptRes.json()
-    assert.strictEqual(exemptData.success, true, 'Exemption should succeed')
-    console.log('   ✅ Admin successfully exempted the member')
-
-    // 4. Test Attendance After Exemption
-    console.log('\n4. Testing Attendance Post-Exemption...')
-    const attendanceRetryRes = await fetch(`${API_URL}/attendance`, {
+    // ── 3. Test Idempotency (duplicate attendance with same key) ─────
+    console.log('\n3. Testing Attendance Idempotency...')
+    const idempotencyKey = `test-idemp-${testMemberId}`
+    
+    const idempotentRes = await fetch(`${API_URL}/attendance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         member_id: testMemberId,
         local_date: localDate,
-        client_timezone: clientTimezone
+        idempotency_key: idempotencyKey
       })
     })
-    const attendanceRetryData = await attendanceRetryRes.json()
-    assert.strictEqual(attendanceRetryData.success, true, 'Attendance should succeed now')
-    console.log('   ✅ Attendance marked successfully')
+    const idempotentData = await idempotentRes.json()
+    // First call — should succeed normally
+    assert.strictEqual(idempotentData.success, true, 'First attendance call should succeed')
+    
+    // Second call with same key — should return 200 idempotent
+    const idempotentRes2 = await fetch(`${API_URL}/attendance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        member_id: testMemberId,
+        local_date: localDate,
+        idempotency_key: idempotencyKey
+      })
+    })
+    const idempotentData2 = await idempotentRes2.json()
+    assert.strictEqual(idempotentRes2.status, 200, 'Idempotent retry should return 200')
+    assert.strictEqual(idempotentData2.idempotent, true, 'Should be marked as idempotent')
+    console.log('   ✅ Idempotency works correctly')
 
-    // 5. Test Payment Logic
+    // ── 4. Test Duplicate Phone Conflict ─────────────────────────────
+    console.log('\n4. Testing Duplicate Phone Conflict...')
+    const dupRes = await fetch(`${API_URL}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Duplicate User',
+        phone: '00000000000',  // Same phone as test member
+        membership_no: `TEST-DUP-${Math.floor(Math.random()*1000)}`,
+        city: 'Duplicate City',
+        joining_date: new Date().toISOString().split('T')[0],
+        fee_amount: 3000
+      })
+    })
+    const dupData = await dupRes.json()
+    assert.strictEqual(dupRes.status, 409, 'Duplicate phone should return 409')
+    assert.strictEqual(dupData.success, false, 'Should return success: false')
+    console.log('   ✅ Duplicate phone correctly rejected with 409')
+
+    // ── 5. Record Payment ────────────────────────────────────────────
     console.log('\n5. Testing Payment Processing...')
     const now = new Date()
     const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -99,6 +126,15 @@ const runTests = async () => {
     assert.ok(foundPayment, 'Payment should be in the history')
     console.log('   ✅ Payment verified in history')
 
+    // ── 6. Read back attendance ──────────────────────────────────────
+    console.log('\n6. Verifying Attendance History...')
+    const fetchAttendanceRes = await fetch(`${API_URL}/attendance?date=${localDate}`)
+    const fetchAttendanceData = await fetchAttendanceRes.json()
+    assert.strictEqual(fetchAttendanceData.success, true, 'Attendance fetch should succeed')
+    const foundAttendance = fetchAttendanceData.data.find(a => a.member_id === testMemberId)
+    assert.ok(foundAttendance, 'Attendance should appear in the records')
+    console.log('   ✅ Attendance confirmed in history')
+
     console.log('\n🎉 All Tests Passed Successfully! 🎉\n')
 
   } catch (error) {
@@ -106,7 +142,7 @@ const runTests = async () => {
     console.error(error.message || error)
     process.exitCode = 1
   } finally {
-    // 6. Cleanup
+    // ── 7. Cleanup ──────────────────────────────────────────────────
     if (testMemberId) {
       console.log('Cleaning up test data...')
       try {

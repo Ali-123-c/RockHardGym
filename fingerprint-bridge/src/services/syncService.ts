@@ -111,14 +111,23 @@ export async function runSyncJob() {
   const startTime = Date.now()
 
   try {
-    const rawLogs = await connectionManager.getAttendanceLogs()
+    // In K50 mode, skip TCP polling — the device doesn't respond to
+    // getAttendances (times out). Attendance is captured via UDP listener.
+    const k50active = config.k50.enabled
+    let fetchedCount = 0
 
-    const formattedLogs = rawLogs
-      .map((log) => formatLogFromDevice(log))
-      .filter(isValidDeviceLog)
-
-    if (formattedLogs.length > 0) {
-      saveLogsLocally(formattedLogs)
+    if (k50active) {
+      logger.info('K50 mode: skipping TCP polling (using UDP listener for real-time scans)')
+    } else {
+      // Standard mode: poll the device for attendance logs
+      const rawLogs = await connectionManager.getAttendanceLogs()
+      const formattedLogs = rawLogs
+        .map((log) => formatLogFromDevice(log))
+        .filter(isValidDeviceLog)
+      fetchedCount = formattedLogs.length
+      if (formattedLogs.length > 0) {
+        saveLogsLocally(formattedLogs)
+      }
     }
 
     const unsyncedLogs = getUnsyncedLogs()
@@ -128,7 +137,7 @@ export async function runSyncJob() {
       await reportStatus('Online', Date.now() - startTime)
       return {
         success: true,
-        fetched: formattedLogs.length,
+        fetched: fetchedCount,
         attempted: 0,
         synced: 0,
         pending: 0,
@@ -159,7 +168,7 @@ export async function runSyncJob() {
     await reportStatus('Online', Date.now() - startTime)
     return {
       success: true,
-      fetched: formattedLogs.length,
+      fetched: fetchedCount,
       attempted: unsyncedLogs.length,
       synced: response.synced || syncedIds.length,
       attendance_marked: response.attendance_marked,
@@ -167,7 +176,10 @@ export async function runSyncJob() {
       pending: getUnsyncedLogs().length,
     }
   } catch (error: any) {
-    const message = error.response?.data?.error || error.message || String(error)
+    // Safely extract error message — the API may return error as string OR
+    // as an object { code, message, id } from different error sources (Supabase, Axios, etc.)
+    const raw = error.response?.data?.error || error.message || error
+    const message = typeof raw === 'string' ? raw : JSON.stringify(raw)
     const failedIds = getUnsyncedLogs().map((log) => log.id as number).filter(Boolean)
 
     logger.error('Sync Job Failed:', message)

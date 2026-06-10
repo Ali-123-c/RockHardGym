@@ -4,6 +4,7 @@ import { SimulatorDevice } from '../zkteco/simulator'
 import { ZKDevice, ZkAttendance, ZkDeviceUser } from '../zkteco/device'
 import { handleRealtimeScan } from './realtimeSync'
 import { syncConfigFromApi } from './configSync'
+import { startK50Listener, stopK50Listener } from './k50RealtimeListener'
 
 type BridgeDevice = {
   connect(): Promise<boolean>
@@ -77,6 +78,9 @@ class ConnectionManager {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
+
+    // Stop K50 UDP listener (graceful — no-op if not started)
+    stopK50Listener()
 
     await this.disconnect()
   }
@@ -209,12 +213,22 @@ class ConnectionManager {
   }
 
   private startRealtimeIfSupported() {
-    if (typeof this.device.startRealtimeListener !== 'function') return
-
-    this.device.startRealtimeListener((log) => {
-      handleRealtimeScan(log).catch((error) => {
-        logger.error('Realtime attendance sync failed', error)
+    // 1. Start TCP-based real-time listener (standard ZKTeco models)
+    if (typeof this.device.startRealtimeListener === 'function') {
+      this.device.startRealtimeListener((log) => {
+        handleRealtimeScan(log).catch((error) => {
+          logger.error('Realtime attendance sync failed', error)
+        })
       })
+    }
+
+    // 2. Start K50 UDP listener to capture broadcast packets.
+    // K50 devices broadcast attendance events over UDP rather than
+    // pushing them over the TCP connection like higher-end models.
+    // This runs in parallel so scans from both K50 and standard
+    // devices are captured.
+    startK50Listener().catch((error) => {
+      logger.warn(`K50 UDP listener failed to start: ${error.message}`)
     })
   }
 

@@ -167,6 +167,29 @@ export async function POST(req: Request) {
     return response
   } catch (error: any) {
     console.error('Sync Error:', error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    // Enhance error diagnostics: Supabase errors carry useful fields
+    // like code, details, hint, and id that help identify missing tables
+    // or misconfigurations vs. transient failures.
+    const supabaseError = {
+      ...(error.code && { supabase_code: error.code }),
+      ...(error.details && { supabase_details: error.details }),
+      ...(error.hint && { supabase_hint: error.hint }),
+      ...(error.id && { supabase_id: error.id }),
+    }
+
+    console.error('Sync Error:', {
+      message: error.message || 'Unknown error',
+      ...supabaseError,
+      stack: error.stack?.substring(0, 500),
+    })
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: error.message || 'Internal Server Error',
+        ...supabaseError,
+      },
+      { status: 500 }
+    )
   }
 }

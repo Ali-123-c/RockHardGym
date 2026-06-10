@@ -28,7 +28,13 @@ export const config = {
     intervalMinutes: parseInt(process.env.SYNC_INTERVAL_MINUTES || '5', 10),
     retryIntervalMs: parseInt(process.env.RETRY_INTERVAL_MS || '60000', 10)
   },
-  mode: (process.env.MODE || 'simulator') as 'real' | 'simulator'
+  mode: (process.env.MODE || 'simulator') as 'real' | 'simulator',
+  // K50 mode: K50 devices don't support TCP data polling (getAttendances times out)
+  // When enabled, the bridge relies solely on the UDP listener for real-time events
+  k50: {
+    enabled: process.env.K50_MODE === 'true',
+    udpPorts: (process.env.K50_UDP_PORTS || '5000,3070,3000').split(',').map(s => Number(s.trim())).filter(p => p > 0),
+  }
 }
 
 /**
